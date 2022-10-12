@@ -51,10 +51,10 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 
 	let expanded = quote! {
 		pub fn #msg_name(#args) {
-			use serde::Serialize;
-			use serde_json::to_vec;
-			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
-			use vision_utils::actor::{send_message, address};
+			use $crate::serde::Serialize;
+			use $crate::serde_json::to_vec;
+			use $crate::wasmer::{WasmPtr, Array, FromToNativeWasmType};
+			use $crate::vision_utils::actor::{send_message, address};
 
 			let init_size: u32 = 0;
 
