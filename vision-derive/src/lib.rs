@@ -12,12 +12,14 @@ use syn::{
 pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut input: ItemFn = parse(input).unwrap();
 
-	let msg_name = input.sig.ident;
-
-	input.sig.ident = Ident::new(
-		&format!("inner_{}", msg_name.to_string()),
+	let msg_ident = input.sig.ident;
+	let inner_ident = Ident::new(
+		&format!("inner_{}", msg_ident.to_string()),
 		Span::call_site(),
 	);
+	let msg_name = msg_ident.to_string();
+
+	input.sig.ident = inner_ident.clone();
 
 	let args = input.sig.inputs.clone();
 	let arg_names: Punctuated<Expr, Comma> = input
@@ -50,40 +52,79 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		.collect();
 
 	let expanded = quote! {
-		pub fn #msg_name(#args) {
-			use serde::Serialize;
+		use std::{ffi::CString, sync::RwLock};
+		use serde::Serialize;
+
+		static ALLOC_RESULT: RwLock<Option<Result<Address, Address>>> = RwLock::new(None);
+
+		pub fn handle_allocate_ok(addr: Address) {
+			ALLOC_RESULT.write().unwrap().replace(Ok(addr));
+		}
+
+		pub fn handle_allocate_err(addr: Address) {
+			ALLOC_RESULT.write().unwrap().replace(Err(addr));
+		}
+
+		// Serialize the Ok or Err value, and write it to the cell
+		fn write_t_bytes(v: impl Serialize, buf: Address) {
 			use serde_json::to_vec;
+			use vision_utils::actor::{send_message, address};
+			use wasmer::{WasmPtr, FromToNativeWasmType};
+
+			let v_bytes = to_vec(&v).unwrap();
+
+			let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
+			let msg_len = v_bytes.len();
+
+			send_message(buf,
+						 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+						 WasmPtr::from_native((&msg_len as *const usize) as i32));
+
+			let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
+
+			for (i, b) in v_bytes.into_iter().enumerate() {
+				// Space for offset u32, and val u8
+				let offset: [u8; 4] = (i as u32).to_le_bytes();
+				let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
+
+				for (i, b) in offset.into_iter().enumerate() {
+					write_args[i] = b;
+				}
+
+				send_message(buf,
+							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 WasmPtr::from_native((&write_args as *const u8) as i32));
+			}
+		}
+
+		pub fn #msg_ident(#args) {
 			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
 			use vision_utils::actor::{send_message, address};
-			use std::ffi::CString;
 
+			// Allocate a memory cell for the Ok or Err value
 			let init_size: u32 = 0;
 			let msg_kind = CString::new("allocate").expect("Invalid scheduler message kind encoding");
-			todo!("send_message does not return anything, use global state");
-			let res_buf = send_message(1,
-									   WasmPtr::from_native(msg_kind.as_ptr() as i32),
-									   WasmPtr::from_native((&init_size as *const u32) as i32));
+			send_message(1,
+						 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+						 WasmPtr::from_native((&init_size as *const u32) as i32));
+			let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
+			let ref_res_buf = WasmPtr::from_native((&res_buf as *const u32) as i32);
 
-		// 	let write_t_bytes = |v| {
-		// 		let v_bytes = to_vec(v).unwrap();
+			// Return the address of the cell to the caller
+			match #inner_ident(#arg_names) {
+				Ok(v) => {
+					let handler_name = CString::new(format!("{}_ok", #msg_name)).expect("Invalid scheduler message kind encoding");
 
-		// 		send_message(res_buf, "grow", v_bytes.len());
+					write_t_bytes(v, res_buf);
+					send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), ref_res_buf);
+				},
+				Err(e) => {
+					let handler_name = CString::new(format!("{}_err", #msg_name)).expect("Invalid scheduler message kind encoding");
 
-		// 		for (i, b) in v_bytes.into_iter().enumerate() {
-		// 			send_message(res_buf, "write", &[i, b]);
-		// 		}
-		// 	};
-
-		// 	match #msg_name(#arg_names) {
-		// 		Ok(v) => {
-		// 			write_t_bytes(v);
-		// 			//send_message(from, &format!("{}_ok", msg_name), &res_buf);
-		// 		},
-		// 		Err(e) => {
-		// 			write_t_bytes(e);
-		// 			//send_message(from, &format!("{}_err", msg_name), &res_buf);
-		// 		},
-		// 	};
+					write_t_bytes(e, res_buf);
+					send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), ref_res_buf);
+				},
+			};
 		}
 
 		#input
