@@ -51,15 +51,19 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 
 	let expanded = quote! {
 		pub fn #msg_name(#args) {
-			use $crate::serde::Serialize;
-			use $crate::serde_json::to_vec;
-			use $crate::wasmer::{WasmPtr, Array, FromToNativeWasmType};
-			use $crate::vision_utils::actor::{send_message, address};
+			use serde::Serialize;
+			use serde_json::to_vec;
+			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
+			use vision_utils::actor::{send_message, address};
+			use std::ffi::CString;
 
 			let init_size: u32 = 0;
-
-			let res_buf = send_message(1, "allocate",
+			let msg_kind = CString::new("allocate").expect("Invalid scheduler message kind encoding");
+			todo!("send_message does not return anything, use global state");
+			let res_buf = send_message(1,
+									   WasmPtr::from_native(msg_kind.as_ptr() as i32),
 									   WasmPtr::from_native((&init_size as *const u32) as i32));
+
 		// 	let write_t_bytes = |v| {
 		// 		let v_bytes = to_vec(v).unwrap();
 
