@@ -7,14 +7,17 @@ use syn::{
 };
 
 /// Generates handle_msgname_ok and handle_msgname_err emitters for the function, providing
-/// better Result ergonomics.
+/// better Result ergonomics. Allocates ok and error values via JSON serialization.
 #[proc_macro_attribute]
 pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut input: ItemFn = parse(input).unwrap();
 
-	let msg_name = input.sig.ident.to_string();
+	let msg_name = input.sig.ident;
 
-	input.sig.ident = Ident::new(&format!("inner_{}", msg_name), Span::call_site());
+	input.sig.ident = Ident::new(
+		&format!("inner_{}", msg_name.to_string()),
+		Span::call_site(),
+	);
 
 	let args = input.sig.inputs.clone();
 	let arg_names: Punctuated<Expr, Comma> = input
@@ -48,29 +51,40 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 
 	let expanded = quote! {
 		pub fn #msg_name(#args) {
+			use serde::Serialize;
+			use serde_json::to_vec;
+			use wasmer::{WasmPtr, Array};
+
 			extern "C" {
 				fn send_message(addr: Address, msg_name_buf: &str, msg_buf: WasmPtr<u8, Array>);
+				fn address() -> Address;
 			}
 
-			match #input(#arg_names) {
-				Ok(v) => send_message(from, &format!("{}_ok", msg_name, ));
-				Err(v) => send_message(from, &format!("{}_err", msg_name));
-			}
+			let res_buf = send_message(1, "allocate", &0);
+			let write_t_bytes = |v| {
+				let v_bytes = to_vec(v).unwrap();
+
+				send_message(res_buf, "grow", v_bytes.len());
+
+				for (i, b) in v_bytes.into_iter().enumerate() {
+					send_message(res_buf, "write", &[i, b]);
+				}
+			};
+
+			match #msg_name(#arg_names) {
+				Ok(v) => {
+					write_t_bytes(v);
+					//send_message(from, &format!("{}_ok", msg_name), &res_buf);
+				},
+				Err(v) => {
+					write_t_bytes(e);
+					//send_message(from, &format!("{}_err", msg_name), &res_buf);
+				},
+			};
 		}
 
 		#input
 	};
 
 	TokenStream::from(expanded)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn it_works() {
-		let result = add(2, 2);
-		assert_eq!(result, 4);
-	}
 }

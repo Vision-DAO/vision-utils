@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["vision-derive"]
+members = ["vision-derive", "vision-derive/vision-derive-test"]
 
 [dependencies]
