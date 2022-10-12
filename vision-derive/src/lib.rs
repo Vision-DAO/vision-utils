@@ -17,7 +17,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		&format!("inner_{}", msg_ident.to_string()),
 		Span::call_site(),
 	);
-	let msg_name = msg_ident.to_string();
+	let msg_name = msg_ident.to_string().replace("handle_", "");
 
 	input.sig.ident = inner_ident.clone();
 
