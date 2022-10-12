@@ -3,6 +3,9 @@ name = "vision-derive-test"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 vision-derive = { path = "../" }
 vision-utils = { path = "../../" }

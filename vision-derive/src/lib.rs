@@ -53,34 +53,33 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		pub fn #msg_name(#args) {
 			use serde::Serialize;
 			use serde_json::to_vec;
-			use wasmer::{WasmPtr, Array};
+			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
+			use vision_utils::actor::{send_message, address};
 
-			extern "C" {
-				fn send_message(addr: Address, msg_name_buf: &str, msg_buf: WasmPtr<u8, Array>);
-				fn address() -> Address;
-			}
+			let init_size: u32 = 0;
 
-			let res_buf = send_message(1, "allocate", &0);
-			let write_t_bytes = |v| {
-				let v_bytes = to_vec(v).unwrap();
+			let res_buf = send_message(1, "allocate",
+									   WasmPtr::from_native((&init_size as *const u32) as i32));
+		// 	let write_t_bytes = |v| {
+		// 		let v_bytes = to_vec(v).unwrap();
 
-				send_message(res_buf, "grow", v_bytes.len());
+		// 		send_message(res_buf, "grow", v_bytes.len());
 
-				for (i, b) in v_bytes.into_iter().enumerate() {
-					send_message(res_buf, "write", &[i, b]);
-				}
-			};
+		// 		for (i, b) in v_bytes.into_iter().enumerate() {
+		// 			send_message(res_buf, "write", &[i, b]);
+		// 		}
+		// 	};
 
-			match #msg_name(#arg_names) {
-				Ok(v) => {
-					write_t_bytes(v);
-					//send_message(from, &format!("{}_ok", msg_name), &res_buf);
-				},
-				Err(v) => {
-					write_t_bytes(e);
-					//send_message(from, &format!("{}_err", msg_name), &res_buf);
-				},
-			};
+		// 	match #msg_name(#arg_names) {
+		// 		Ok(v) => {
+		// 			write_t_bytes(v);
+		// 			//send_message(from, &format!("{}_ok", msg_name), &res_buf);
+		// 		},
+		// 		Err(e) => {
+		// 			write_t_bytes(e);
+		// 			//send_message(from, &format!("{}_err", msg_name), &res_buf);
+		// 		},
+		// 	};
 		}
 
 		#input

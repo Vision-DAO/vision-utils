@@ -7,3 +7,4 @@ edition = "2021"
 members = ["vision-derive", "vision-derive/vision-derive-test"]
 
 [dependencies]
+wasmer = { version = "2.3.0", features = ["js", "std", "wasm-types-polyfill"], default-features = false }
