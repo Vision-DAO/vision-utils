@@ -51,6 +51,11 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		})
 		.collect();
 
+	// Use serde_json to serialize the Ok and Err values, or inline them if
+	// they are native wasm values
+	let serializer = quote! {
+	}
+
 	let expanded = quote! {
 		pub fn #msg_ident(#args) {
 			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
