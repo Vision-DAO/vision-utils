@@ -11,3 +11,4 @@ workspace = ["vision-derive-test"]
 syn = { version = "1.0", features = ["full"] }
 proc-macro2 = "1.0.46"
 quote = "1.0"
+itertools = "0.10.5"
