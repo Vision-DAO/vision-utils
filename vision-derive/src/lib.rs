@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::{
 	parse, punctuated::Punctuated, token::Comma, Expr, ExprPath, FnArg, Ident, ItemFn, Pat,
-	PatIdent, Path, PathArguments, PathSegment,
+	PatIdent, Path, PathArguments, PathSegment, ReturnType, Type, GenericArgument,
 };
 
 /// Generates handle_msgname_ok and handle_msgname_err emitters for the function, providing
@@ -51,10 +51,25 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		})
 		.collect();
 
+	let result_types = match input.sig.output {
+		ReturnType::Default => None,
+		ReturnType::Type(_, ty) => Some(ty),
+	}
+	.and_then(|ty| match *ty {
+		Type::Path(p) => Some(p),
+		_ => None,
+	})
+	.and_then(|p| p.path.segments.last())
+	.and_then(|s| match s.arguments {
+		PathArguments::AngleBracketed(br) => Some(br.args),
+		_ => None,
+	}).and_then(|args| args.iter().filter_map(|arg| match arg {
+		GenericArgument::Type()
+	}));
+
 	// Use serde_json to serialize the Ok and Err values, or inline them if
 	// they are native wasm values
-	let serializer = quote! {
-	}
+	let serializer = quote! {};
 
 	let expanded = quote! {
 		pub fn #msg_ident(#args) {
@@ -68,21 +83,14 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 						 WasmPtr::from_native(msg_kind.as_ptr() as i32),
 						 WasmPtr::from_native((&init_size as *const u32) as i32));
 			let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
-			let ref_res_buf = WasmPtr::from_native((&res_buf as *const u32) as i32);
 
 			// Return the address of the cell to the caller
 			match #inner_ident(#arg_names) {
 				Ok(v) => {
-					let handler_name = CString::new(format!("{}_ok", #msg_name)).expect("Invalid scheduler message kind encoding");
-
-					write_t_bytes(v, res_buf);
-					send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), ref_res_buf);
+					trigger_callback(v, "ok", #msg_name, res_buf);
 				},
 				Err(e) => {
-					let handler_name = CString::new(format!("{}_err", #msg_name)).expect("Invalid scheduler message kind encoding");
-
-					write_t_bytes(e, res_buf);
-					send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), ref_res_buf);
+					trigger_callback(e, "err", #msg_name, res_buf);
 				},
 			};
 		}
@@ -92,10 +100,21 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 
 		static ALLOC_RESULT: RwLock<Option<Result<Address, Address>>> = RwLock::new(None);
 
+		fn trigger_callback(v: impl Serialize, label: &str, msg_name: &str, res_buf: Address) {
+			let handler_name = CString::new(format!("{}_{}", msg_name, label)).expect("Invalid scheduler message kind encoding");
+			let ref_res_buf = WasmPtr::from_native((&res_buf as *const u32) as i32);
+
+			write_t_bytes(v, res_buf);
+			send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), ref_res_buf);
+		}
+
+		#[wasm_bindgen::prelude::wasm_bindgen]
 		pub fn handle_allocate_ok(addr: Address) {
 			ALLOC_RESULT.write().unwrap().replace(Ok(addr));
 		}
 
+
+		#[wasm_bindgen::prelude::wasm_bindgen]
 		pub fn handle_allocate_err(addr: Address) {
 			ALLOC_RESULT.write().unwrap().replace(Err(addr));
 		}
