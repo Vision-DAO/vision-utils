@@ -106,6 +106,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 						let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
 
 						use serde_json::to_vec;
+						use serde::Serialize;
 						use vision_utils::actor::{send_message, address};
 						use wasmer::{WasmPtr, FromToNativeWasmType};
 
@@ -146,7 +147,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		pub fn #msg_ident(#args) {
 			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
 			use vision_utils::actor::{send_message, address};
-
+			use std::{ffi::CString};
 
 			// Return the address of the cell to the caller
 			match #inner_ident(#arg_names) {
@@ -171,10 +172,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 	// Sequencing for operations dealing with Results that should only be appended to
 	// a module once. TODO: Do this at the module level, without macro state.
 	let pipeline = quote! {
-		use std::{ffi::CString, sync::RwLock};
-		use serde::Serialize;
-
-		static ALLOC_RESULT: RwLock<Option<Result<Address, Address>>> = RwLock::new(None);
+		static ALLOC_RESULT: std::sync::RwLock<Option<Result<Address, Address>>> = std::sync::RwLock::new(None);
 
 		#[wasm_bindgen::prelude::wasm_bindgen]
 		pub fn handle_allocate_ok(addr: Address) {
