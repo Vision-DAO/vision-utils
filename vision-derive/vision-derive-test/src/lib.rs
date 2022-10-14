@@ -6,3 +6,9 @@ use vision_utils::types::Address;
 pub fn handle_mymessage(from: Address, arg: u8) -> Result<u8, String> {
 	Ok(arg)
 }
+
+#[with_result_message]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn handle_secondmessage(from: Address, arg: u8) -> Result<u8, String> {
+	Ok(arg)
+}

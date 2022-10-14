@@ -7,6 +7,11 @@ use syn::{
 	ItemFn, Pat, PatIdent, Path, PathArguments, PathSegment, ReturnType, Type,
 };
 
+use std::sync::RwLock;
+
+/// Whether or not the module's pipeline system has been generated already.
+static MODULE_GEN: RwLock<bool> = RwLock::new(false);
+
 /// Generates handle_msgname_ok and handle_msgname_err emitters for the function, providing
 /// better Result ergonomics. Allocates ok and error values via JSON serialization.
 #[proc_macro_attribute]
@@ -160,6 +165,12 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 			};
 		}
 
+		#input
+	};
+
+	// Sequencing for operations dealing with Results that should only be appended to
+	// a module once. TODO: Do this at the module level, without macro state.
+	let pipeline = quote! {
 		use std::{ffi::CString, sync::RwLock};
 		use serde::Serialize;
 
@@ -175,9 +186,18 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 		pub fn handle_allocate_err(addr: Address) {
 			ALLOC_RESULT.write().unwrap().replace(Err(addr));
 		}
-
-		#input
 	};
 
-	TokenStream::from(expanded)
+	let mut pipeline_gen = MODULE_GEN.write().unwrap();
+
+	TokenStream::from(if *pipeline_gen {
+		expanded
+	} else {
+		*pipeline_gen = true;
+
+		quote! {
+			#expanded
+			#pipeline
+		}
+	})
 }
