@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
-use quote::quote;
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{quote, ToTokens};
 use syn::{
 	parse, punctuated::Punctuated, token::Comma, Expr, ExprPath, FnArg, GenericArgument, Ident,
 	ItemFn, Pat, PatIdent, Path, PathArguments, PathSegment, ReturnType, Type,
@@ -25,6 +25,12 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 	);
 	let msg_name = msg_ident.to_string().replace("handle_", "");
 
+	let extern_attrs = TokenStream2::from_iter(
+		input
+			.attrs
+			.drain(..input.attrs.len())
+			.map(|tok| tok.to_token_stream()),
+	);
 	input.sig.ident = inner_ident.clone();
 
 	let args = input.sig.inputs.clone();
@@ -144,6 +150,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 	.expect("Handler needs a Result<Ok, Err> return to be eligible.");
 
 	let expanded = quote! {
+		#extern_attrs
 		pub fn #msg_ident(#args) {
 			use wasmer::{WasmPtr, Array, FromToNativeWasmType};
 			use vision_utils::actor::{send_message, address};

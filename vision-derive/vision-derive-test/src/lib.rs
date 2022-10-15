@@ -1,14 +1,15 @@
 use vision_derive::with_result_message;
 use vision_utils::types::Address;
 
-#[with_result_message]
-#[wasm_bindgen::prelude::wasm_bindgen]
-pub fn handle_mymessage(from: Address, arg: u8) -> Result<u8, String> {
-	Ok(arg)
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct MyStruct {
+	val: u8,
 }
 
 #[with_result_message]
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub fn handle_secondmessage(from: Address, arg: u8) -> Result<u8, String> {
-	Ok(arg)
+pub fn handle_structmsg(from: Address, arg: u8) -> Result<MyStruct, String> {
+	Ok(MyStruct { val: arg })
 }
