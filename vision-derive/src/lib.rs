@@ -106,7 +106,7 @@ pub fn with_result_message(_args: TokenStream, input: TokenStream) -> TokenStrea
 						// Allocate a memory cell for the Ok or Err value
 						let init_size: u32 = 0;
 						let msg_kind = CString::new("allocate").expect("Invalid scheduler message kind encoding");
-						send_message(1,
+						send_message(vision_utils::types::ALLOCATOR_ADDR,
 									 WasmPtr::from_native(msg_kind.as_ptr() as i32),
 									 WasmPtr::from_native((&init_size as *const u32) as i32));
 						let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
