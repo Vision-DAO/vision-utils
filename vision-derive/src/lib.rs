@@ -5,7 +5,7 @@ use quote::{quote, ToTokens};
 use syn::{
 	parse, parse_quote, punctuated::Punctuated, token::Comma, Expr, ExprPath, FnArg,
 	GenericArgument, Ident, ItemFn, Pat, PatIdent, Path, PathArguments, PathSegment, ReturnType,
-	Type,
+	Type, TypePath,
 };
 
 use std::sync::RwLock;
@@ -30,13 +30,13 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	// Messages have ABI bindings generated that allow easy UX:
 	// - A pipeline mutex that allows bubbling results from handlers up to
 	// originating callers
-	// - Handler methods that 
+	// - Handler methods that
 	let msg_pipeline_name = Ident::new(
 		&format!("PIPELINE_{}", msg_name.to_ascii_uppercase()),
 		Span::call_site(),
 	);
 	let msg_macro_name = Ident::new(&format!("use_{}", msg_name), Span::call_site());
-	let 
+	let msg_ret_handler_name = Ident::new(&format!("handle_{}", msg_name), Span::call_site());
 
 	let msg_ident = input.sig.ident;
 
@@ -88,7 +88,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		.collect();
 
 	// Use serde_json to serialize the return value of the function
-	let ser = match input.sig.output {
+	let ser_type = match input.sig.output {
 		ReturnType::Default => None,
 		ReturnType::Type(_, ref ty) => Some(ty),
 	}
@@ -96,135 +96,148 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		Type::Path(p) => Some(p),
 		_ => None,
 	})
-	.and_then(|p| p.path.segments.last().map(|p| p.ident))
-	.map(|ret| {
-		// If the return value is a copy type, use its native representation
-		match ret.to_string().as_str() {
-			"i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => Some(quote! {
-				let arg = WasmPtr::from_native((&v as *const u8) as i32);
-			}),
-			_ => None,
-		}
-		// Otherwise, use serde to pass in a memory cell address
-		.unwrap_or(quote! {
-			// Allocate a memory cell for the value
-			let init_size: u32 = 0;
-			let msg_kind = CString::new("allocate").expect("Internal allocator error");
-			send_message(vision_utils::types::ALLOCATOR_ADDR,
-						 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-						 WasmPtr::from_native((&init_size as *const u32) as i32));
-			let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
+	.and_then(|p| p.path.segments.last().map(|p| p.ident));
 
-			use serde_json::to_vec;
-			use serde::Serialize;
-			use vision_utils::actor::{send_message, address};
-			use wasmer::{WasmPtr, FromToNativeWasmType};
-
-			let v_bytes = to_vec(&v).unwrap();
-
-			let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
-			let msg_len = v_bytes.len();
-
-			send_message(res_buf,
-						 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-						 WasmPtr::from_native((&msg_len as *const usize) as i32));
-
-			let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
-
-			for (i, b) in v_bytes.into_iter().enumerate() {
-				// Space for offset u32, and val u8
-				let offset: [u8; 4] = (i as u32).to_le_bytes();
-				let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
-
-				for (i, b) in offset.into_iter().enumerate() {
-					write_args[i] = b;
+	let ret_type: TypePath;
+	let ser = ser_type
+		.map(|ret| {
+			// If the return value is a copy type, use its native representation
+			match ret.to_string().as_str() {
+				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+					Some(quote! {
+						let arg = WasmPtr::from_native((&v as *const u8) as i32);
+						ret_type = ret;
+					})
 				}
+				_ => {
+					ret_type = parse_quote! {vision_utils::types::Address};
+					None
+				}
+			}
+			// Otherwise, use serde to pass in a memory cell address
+			.unwrap_or(quote! {
+				// Allocate a memory cell for the value
+				let init_size: u32 = 0;
+				let msg_kind = CString::new("allocate").expect("Internal allocator error");
+				send_message(vision_utils::types::ALLOCATOR_ADDR,
+							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 WasmPtr::from_native((&init_size as *const u32) as i32));
+				let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
+
+				use serde_json::to_vec;
+				use serde::Serialize;
+				use vision_utils::actor::{send_message, address};
+				use wasmer::{WasmPtr, FromToNativeWasmType};
+
+				let v_bytes = to_vec(&v).unwrap();
+
+				let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
+				let msg_len = v_bytes.len();
 
 				send_message(res_buf,
 							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-							 WasmPtr::from_native((&write_args as *const u8) as i32));
-			}
+							 WasmPtr::from_native((&msg_len as *const usize) as i32));
 
-			let arg = WasmPtr::from_native((&res_buf as *const u32) as i32);
-		})
-	})
-	.unwrap_or(quote! {
-		let arg = v;
-	});
+				let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
 
-	// Use serde_json to deserialize the parameters of the function
-	let mut der = TokenStream2::new();
-	let arg_types_iter = args_iter
-		.map(|arg| {
-			(
-				match *arg.pat {
-					Pat::Ident(pat) => Some(pat.ident),
-					_ => None,
+				for (i, b) in v_bytes.into_iter().enumerate() {
+					// Space for offset u32, and val u8
+					let offset: [u8; 4] = (i as u32).to_le_bytes();
+					let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
+
+					for (i, b) in offset.into_iter().enumerate() {
+						write_args[i] = b;
+					}
+
+					send_message(res_buf,
+								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+								 WasmPtr::from_native((&write_args as *const u8) as i32));
 				}
-				.expect("Handlers may not have non-identifier arguments"),
-				arg.ty,
-			)
+
+				let arg = WasmPtr::from_native((&res_buf as *const u32) as i32);
+			})
 		})
-		.map(|(ident, ty)| {
-			(
-				ident,
-				match *ty {
-					Type::Path(pat) => pat.path.segments.last(),
-					_ => None,
-				}
-				.expect("Handlers may not have non-identifier argument types")
-				.ident,
-			)
+		.unwrap_or(quote! {
+			let arg = v;
 		});
 
-	for (i, (pat, ty)) in arg_types_iter.enumerate() {
-		match ty.to_string().as_str() {
-			// No work needs to be done for copy types, since they are passed in as their values
-			"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
-				der = quote! {
-					#der
+	fn gen_der(args: impl Iterator<Item = FnArg>) -> TokenStream2 {
+		// Use serde_json to deserialize the parameters of the function
+		let mut der = TokenStream2::new();
+		let arg_types_iter = args_iter
+			.map(|arg| {
+				(
+					match *arg.pat {
+						Pat::Ident(pat) => Some(pat.ident),
+						_ => None,
+					}
+					.expect("Handlers may not have non-identifier arguments"),
+					arg.ty,
+				)
+			})
+			.map(|(ident, ty)| {
+				(
+					ident,
+					match *ty {
+						Type::Path(pat) => pat.path.segments.last(),
+						_ => None,
+					}
+					.expect("Handlers may not have non-identifier argument types")
+					.ident,
+				)
+			});
 
-					let #pat = #pat as #ty;
-				};
-			}
-			_ => {
-				der = quote! {
-					#der
+		for (i, (pat, ty)) in arg_types_iter.enumerate() {
+			match ty.to_string().as_str() {
+				// No work needs to be done for copy types, since they are passed in as their values
+				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+					der = quote! {
+						#der
 
-					let #pat = {
-						use serde_json::to_vec;
-						use beacon_dao_allocator::PIPELINE;
+						let #pat = #pat as #ty;
+					};
+				}
+				_ => {
+					der = quote! {
+						#der
 
-						// Read until a } character is encoutnered (this should be JSON)
-						// or the results buffer isn't expanding
-						let cell = #pat;
-						let msg_kind = CString::new("read").expect("Internal allocator error");
-						let msg_name = WasmPtr::from_native(msg_kind.as_ptr() as i32);
-						let mut buf = Vec::new();
+						let #pat = {
+							use serde_json::to_vec;
+							use beacon_dao_allocator::PIPELINE;
 
-						for i in 0..u32::MAX {
-							send_message(cell, msg_name, WasmPtr::from_native((&i as *const u32) as i32));
+							// Read until a } character is encoutnered (this should be JSON)
+							// or the results buffer isn't expanding
+							let cell = #pat;
+							let msg_kind = CString::new("read").expect("Internal allocator error");
+							let msg_name = WasmPtr::from_native(msg_kind.as_ptr() as i32);
+							let mut buf = Vec::new();
 
-							if let Some(next) = PIPELINE.write().unwrap().take() {
-								buff.push(next);
-							} else {
-								break;
+							for i in 0..u32::MAX {
+								send_message(cell, msg_name, WasmPtr::from_native((&i as *const u32) as i32));
+
+								if let Some(next) = PIPELINE.write().unwrap().take() {
+									buff.push(next);
+								} else {
+									break;
+								}
 							}
-						}
 
-						// This should not happen, since the wrapper method being used conforms to this practice
-						serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.");
+							// This should not happen, since the wrapper method being used conforms to this practice
+							serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
+						};
 					};
-				};
 
-				// Since a heap-allocated proxy was used to read the argument, accept it as an Address
-				if let FnArg::Typed(ref mut typed_arg) = args[i] {
-					typed_arg.ty = parse_quote! {
-						vision_utils::types::Address
-					};
+					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
+					if let FnArg::Typed(ref mut typed_arg) = args[i] {
+						typed_arg.ty = parse_quote! {
+							vision_utils::types::Address
+						};
+					}
 				}
 			}
 		}
+
+		der
 	}
 
 	// Use the serializer to return a WASM-compatible response to consumers
@@ -236,22 +249,22 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			#der
 
 			let v = #inner_ident(#arg_names);
+
 			#ser
+
+			let handler_name = CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+			send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), arg);
 		}
 
-		pub static #msg_pipeline_name: std::sync::RwLock<Option<Result<Address, Address>>> = std::sync::RwLock::new(None);
+		pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>>> = std::sync::RwLock::new(None);
 
 		#[macro_export]
 		macro_rules! #msg_macro_name {
 			() => {
 				#[wasm_bindgen::prelude::wasm_bindgen]
-				pub fn handle_#msg_name(addr: Address) {
-					PIPELINE.write().unwrap().replace(Ok(addr));
-				}
-
-				#[wasm_bindgen::prelude::wasm_bindgen]
-				pub fn handle_allocate_err(addr: Address) {
-					PIPELINE.write().unwrap().replace(Err(addr));
+				pub fn #msg_ret_handler_name(from: Address, arg: #ret_type) {
+					#der
+					#msg_pipeline_name.write().unwrap().replace(arg);
 				}
 			}
 		}
