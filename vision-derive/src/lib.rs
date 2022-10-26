@@ -98,7 +98,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 		.and_then(|p| p.path.segments.last().map(|p| p.ident.clone()));
 
-	let mut ret_type: TypePath = TypePath;
+	let mut ret_type: Option<TypePath> = None;
 	let ser = ser_type_ident
 		.map(|ret| {
 			// If the return value is a copy type, use its native representation
@@ -106,11 +106,11 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 					Some(quote! {
 						let arg = WasmPtr::from_native((&v as *const u8) as i32);
-						ret_type = ret;
+						ret_type = Some(ret);
 					})
 				}
 				_ => {
-					ret_type = parse_quote! {vision_utils::types::Address};
+					ret_type = Some(parse_quote! {vision_utils::types::Address});
 					None
 				}
 			}
@@ -163,7 +163,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 	fn gen_der(
 		args_iter: impl Iterator<Item = PatType>,
-		args: Option<&mut Punctuated<FnArg, Comma>>,
+		mut args: Option<&mut Punctuated<FnArg, Comma>>,
 	) -> TokenStream2 {
 		// Use serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -182,11 +182,12 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 				(
 					ident,
 					match *ty {
-						Type::Path(pat) => pat.path.segments.last(),
+						Type::Path(pat) => pat.path.segments.last().cloned(),
 						_ => None,
 					}
 					.expect("Handlers may not have non-identifier argument types")
-					.ident,
+					.ident
+					.clone(),
 				)
 			});
 
@@ -231,7 +232,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					};
 
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
-					if let Some(args) = args {
+					if let Some(ref mut args) = args {
 						if let FnArg::Typed(ref mut typed_arg) = args[i] {
 							typed_arg.ty = parse_quote! {
 								vision_utils::types::Address
@@ -245,6 +246,10 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		der
 	}
 
+	fn gen_ser(args_iter: impl Iterator<Item = PatType>, mut args: Option<&mut Punctuated<FnArg, Comma>>) -> TokenStream2 {
+		
+	}
+
 	let der = gen_der(args_iter, Some(&mut args));
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
@@ -253,7 +258,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			attrs: Vec::new(),
 			pat: parse_quote! {arg},
 			colon_token: Colon::default(),
-			ty: *arg_type,
+			ty: arg_type.clone(),
 		});
 	}
 
@@ -262,7 +267,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
-	TokenStream::from(quote! {
+	let mut gen = quote! {
 		#extern_attrs
 		pub fn #msg_ident(#args) {
 			#der
@@ -274,17 +279,35 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			let handler_name = CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
 			send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), arg);
 		}
+	};
 
-		pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>>> = std::sync::RwLock::new(None);
+	// Include handlers for the response value if there is one
+	if let Some(ret_type) = ret_type {
+		gen = quote! {
+			#gen
 
-		#[macro_export]
-		macro_rules! #msg_macro_name {
-			() => {
-				#[wasm_bindgen::prelude::wasm_bindgen]
-				pub fn #msg_ret_handler_name(from: Address, arg: #ret_type) {
-					#msg_pipeline_name.write().unwrap().replace(arg);
+			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>>> = std::sync::RwLock::new(None);
+
+			#[macro_export]
+			macro_rules! #msg_macro_name {
+				() => {
+					#[wasm_bindgen::prelude::wasm_bindgen]
+					pub fn #msg_ret_handler_name(from: Address, arg: #ret_type) {
+						#ret_der
+						#msg_pipeline_name.write().unwrap().replace(arg);
+					}
 				}
 			}
 		}
-	})
+	} else {
+		gen = quote! {
+			#gen
+
+			pub fn #msg_name(#original_args) {
+				send_message(#
+			}
+		}
+	}
+
+	TokenStream::from(gen)
 }
