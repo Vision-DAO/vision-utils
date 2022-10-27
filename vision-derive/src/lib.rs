@@ -1,11 +1,15 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
+use std::iter;
 use syn::{
 	parse, parse_quote, punctuated::Punctuated, token::Colon, token::Comma, Expr, ExprPath, FnArg,
 	Ident, ItemFn, Pat, PatIdent, PatType, Path, PathArguments, PathSegment, ReturnType, Type,
 	TypePath,
 };
+
+trait CloneIter: Iterator<Item = PatType> + Clone {}
+impl<T: Iterator<Item = PatType> + Clone> CloneIter for T {}
 
 /// For a message handler, generates:
 /// - A rust binding for calling the method, and using it in a synchronous way
@@ -53,7 +57,6 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 	// Save argument names for proxying call to inner handlers
 	let mut args = input.sig.inputs.clone();
-	let original_args = args.clone();
 	let args_iter = input
 		.sig
 		.inputs
@@ -63,6 +66,9 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			FnArg::Typed(arg) => Some(arg),
 			FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 		});
+
+	let original_args: Punctuated<PatType, Comma> =
+		Punctuated::from_iter(args_iter.clone().skip(1));
 
 	let arg_names: Punctuated<Expr, Comma> = args_iter
 		.clone()
@@ -86,82 +92,6 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			_ => panic!("Could not parse arguments."),
 		})
 		.collect();
-
-	// Use serde_json to serialize the return value of the function
-	let ser_type = match input.sig.output {
-		ReturnType::Default => None,
-		ReturnType::Type(_, ref ty) => Some(ty),
-	};
-
-	let ser_type_ident = ser_type
-		.and_then(|ty| match &**ty {
-			Type::Path(p) => Some(p),
-			_ => None,
-		})
-		.and_then(|p| p.path.segments.last().map(|p| p.ident.clone()));
-
-	let mut ret_type: Option<TypePath> = None;
-	let ser = ser_type_ident
-		.map(|ret| {
-			// If the return value is a copy type, use its native representation
-			match ret.to_string().as_str() {
-				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
-					Some(quote! {
-						let arg = WasmPtr::from_native((&v as *const u8) as i32);
-						ret_type = Some(ret);
-					})
-				}
-				_ => {
-					ret_type = Some(parse_quote! {vision_utils::types::Address});
-					None
-				}
-			}
-			// Otherwise, use serde to pass in a memory cell address
-			.unwrap_or(quote! {
-				// Allocate a memory cell for the value
-				let init_size: u32 = 0;
-				let msg_kind = CString::new("allocate").expect("Internal allocator error");
-				send_message(vision_utils::types::ALLOCATOR_ADDR,
-							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-							 WasmPtr::from_native((&init_size as *const u32) as i32));
-				let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
-
-				use serde_json::to_vec;
-				use serde::Serialize;
-				use vision_utils::actor::{send_message, address};
-				use wasmer::{WasmPtr, FromToNativeWasmType};
-
-				let v_bytes = to_vec(&v).unwrap();
-
-				let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
-				let msg_len = v_bytes.len();
-
-				send_message(res_buf,
-							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-							 WasmPtr::from_native((&msg_len as *const usize) as i32));
-
-				let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
-
-				for (i, b) in v_bytes.into_iter().enumerate() {
-					// Space for offset u32, and val u8
-					let offset: [u8; 4] = (i as u32).to_le_bytes();
-					let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
-
-					for (i, b) in offset.into_iter().enumerate() {
-						write_args[i] = b;
-					}
-
-					send_message(res_buf,
-								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-								 WasmPtr::from_native((&write_args as *const u8) as i32));
-				}
-
-				let arg = WasmPtr::from_native((&res_buf as *const u32) as i32);
-			})
-		})
-		.unwrap_or(quote! {
-			let arg = v;
-		});
 
 	fn gen_der(
 		args_iter: impl Iterator<Item = PatType>,
@@ -248,22 +178,147 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		der
 	}
 
-	fn gen_ser(args_iter: impl Iterator<Item = PatType>) -> TokenStream2 {}
+	fn gen_ser(
+		args_iter: impl Iterator<Item = PatType> + Clone,
+	) -> (TokenStream2, Vec<Option<TypePath>>) {
+		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
+
+		let args_iter = args_iter
+			.filter_map(|arg| match *arg.pat {
+				Pat::Ident(id) => Some((id, arg.ty)),
+				_ => panic!("Arguments must be named"),
+			})
+			.filter_map(|(id, pat)| match *pat {
+				Type::Path(ty) => Some((id, ty)),
+				_ => panic!("Arguments must be typed"),
+			});
+
+		let total_bytes = args_iter.clone().fold(0, |acc, (_, ser_type)| {
+			acc + match ser_type
+				.path
+				.segments
+				.last()
+				.map(|p| p.ident.clone())
+				.expect("Invalid Type")
+				.to_string()
+				.as_str()
+			{
+				"i8" | "u8" => 8,
+				"i16" | "u16" => 16,
+				"i64" | "u64" => 64,
+				_ => 32, // Address (and anything serialied to an address), i32, u32
+			}
+		});
+
+		let mut gen_buf = quote! {
+			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes);
+		};
+
+		for (id, ser_type) in args_iter {
+			let ser_type_ident = ser_type
+				.path
+				.segments
+				.last()
+				.map(|p| p.ident.clone())
+				.expect("Invalid type");
+
+			let ser = {
+				// If the return value is a copy type, use its native representation
+				match ser_type_ident.to_string().as_str() {
+					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+						type_buf.push(Some(ser_type));
+						Some(quote! {
+							let #id = WasmPtr::from_native(v.as_ptr() as i32 + v.len());
+							v.append(#id.to_le_bytes());
+						})
+					}
+					_ => {
+						type_buf.push(Some(parse_quote! {vision_utils::types::Address}));
+						None
+					}
+				}
+				// Otherwise, use serde to pass in a memory cell address
+				.unwrap_or(quote! {
+					// Allocate a memory cell for the value
+					let init_size: u32 = 0;
+					let msg_kind = CString::new("allocate").expect("Internal allocator error");
+					send_message(vision_utils::types::ALLOCATOR_ADDR,
+								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+								 WasmPtr::from_native((&init_size as *const u32) as i32));
+					let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
+
+					use serde_json::to_vec;
+					use serde::Serialize;
+					use vision_utils::actor::{send_message, address};
+					use wasmer::{WasmPtr, FromToNativeWasmType};
+
+					let v_bytes = to_vec(&#id).unwrap();
+
+					let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
+					let msg_len = v_bytes.len();
+
+					send_message(res_buf,
+								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+								 WasmPtr::from_native((&msg_len as *const usize) as i32));
+
+					let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
+
+					for (i, b) in v_bytes.into_iter().enumerate() {
+						// Space for offset u32, and val u8
+						let offset: [u8; 4] = (i as u32).to_le_bytes();
+						let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
+
+						for (i, b) in offset.into_iter().enumerate() {
+							write_args[i] = b;
+						}
+
+						send_message(res_buf,
+									 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+									 WasmPtr::from_native((&write_args as *const u8) as i32));
+					}
+
+					let #id = WasmPtr::from_native((&res_buf as *const u32) as i32);
+				})
+			};
+
+			gen_buf = quote! {
+				#gen_buf
+				#ser
+			};
+		}
+		(gen_buf, type_buf)
+	}
+
+	let mut ser_type = None;
+	let (ser, arg_type) = match input.sig.output {
+		ReturnType::Default => gen_ser(iter::empty()),
+		ReturnType::Type(_, ty) => {
+			ser_type = Some(ty);
+			gen_ser(iter::once(PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {arg},
+				colon_token: Colon::default(),
+				ty,
+			}))
+		}
+	};
 
 	let der = gen_der(args_iter, Some(&mut args));
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
-	if let Some(arg_type) = ser_type {
+	let mut ret_type: Option<TypePath> = None;
+	if let Some(arg_type) = arg_type.get(0).map(|&op| op).flatten() {
+		ret_type = Some(arg_type);
 		ret_handler_args.push_value(PatType {
 			attrs: Vec::new(),
 			pat: parse_quote! {arg},
 			colon_token: Colon::default(),
-			ty: arg_type.clone(),
-		});
+			ty: Box::new(Type::Path(arg_type)),
+		})
 	}
 
 	let ret_der = gen_der(ret_handler_args.into_iter(), None);
-	let client_arg_ser = gen_set();
+	let (client_arg_ser, _) = gen_ser(original_args.into_iter().skip(1));
 
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
@@ -273,7 +328,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		pub fn #msg_ident(#args) {
 			#der
 
-			let v = #inner_ident(#arg_names);
+			let arg = #inner_ident(#arg_names);
 
 			#ser
 
@@ -301,12 +356,18 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 	} else {
+		let msg_name_vis = msg_name.to_string();
 		gen = quote! {
 			#gen
 
-			pub fn #msg_name(#original_args) {
+			pub fn #msg_name(to: vision_utils::types::Address, #original_args) {
 				#client_arg_ser
-				send_message(#arg_names);
+				let msg_kind = CString::new(#msg_name_vis)
+					.expect("Invalid scheduler message kind encoding");
+
+				send_message(to,
+							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 #arg_names);
 			}
 		}
 	}
