@@ -51,8 +51,9 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	);
 	input.sig.ident = inner_ident.clone();
 
-	// Save argument names for proxying call to inner handler
+	// Save argument names for proxying call to inner handlers
 	let mut args = input.sig.inputs.clone();
+	let original_args = args.clone();
 	let args_iter = input
 		.sig
 		.inputs
@@ -62,6 +63,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			FnArg::Typed(arg) => Some(arg),
 			FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 		});
+
 	let arg_names: Punctuated<Expr, Comma> = args_iter
 		.clone()
 		.map(|arg| arg.pat)
@@ -246,9 +248,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		der
 	}
 
-	fn gen_ser(args_iter: impl Iterator<Item = PatType>, mut args: Option<&mut Punctuated<FnArg, Comma>>) -> TokenStream2 {
-		
-	}
+	fn gen_ser(args_iter: impl Iterator<Item = PatType>) -> TokenStream2 {}
 
 	let der = gen_der(args_iter, Some(&mut args));
 
@@ -263,6 +263,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let ret_der = gen_der(ret_handler_args.into_iter(), None);
+	let client_arg_ser = gen_set();
 
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
@@ -304,7 +305,8 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			#gen
 
 			pub fn #msg_name(#original_args) {
-				send_message(#
+				#client_arg_ser
+				send_message(#arg_names);
 			}
 		}
 	}
