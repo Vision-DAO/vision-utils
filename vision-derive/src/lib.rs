@@ -144,12 +144,12 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 							// Read until a } character is encoutnered (this should be JSON)
 							// or the results buffer isn't expanding
 							let cell = #pat;
-							let msg_kind = CString::new("read").expect("Internal allocator error");
-							let msg_name = WasmPtr::from_native(msg_kind.as_ptr() as i32);
+							let msg_kind = std::ffi::CString::new("read").expect("Internal allocator error");
+							let msg_name = wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32);
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
-								send_message(cell, msg_name, WasmPtr::from_native((&i as *const u32) as i32));
+								send_message(cell, msg_name, wasmer::WasmPtr::from_native((&i as *const u32) as i32));
 
 								if let Some(next) = PIPELINE.write().unwrap().take() {
 									buff.push(next);
@@ -211,7 +211,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		});
 
 		let mut gen_buf = quote! {
-			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes);
+			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
 		};
 
 		for (id, ser_type) in args_iter {
@@ -228,7 +228,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = WasmPtr::from_native(v.as_ptr() as i32 + v.len());
+							let #id = wasmer::WasmPtr::from_native(v.as_ptr() as i32 + v.len() as i32);
 							v.append(#id.to_le_bytes());
 						})
 					}
@@ -241,30 +241,29 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
 					let init_size: u32 = 0;
-					let msg_kind = CString::new("allocate").expect("Internal allocator error");
+					let msg_kind = std::ffi::CString::new("allocate").expect("Internal allocator error");
 					send_message(vision_utils::types::ALLOCATOR_ADDR,
-								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-								 WasmPtr::from_native((&init_size as *const u32) as i32));
+								 wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32),
+								 wasmer::WasmPtr::from_native((&init_size as *const u32) as i32));
 					let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
 
 					use serde_json::to_vec;
 					use serde::Serialize;
-					use vision_utils::actor::{send_message, address};
-					use wasmer::{WasmPtr, FromToNativeWasmType};
+					use vision_utils::actor::{address};
 
 					let v_bytes = to_vec(&#id).unwrap();
 
-					let #id = WasmPtr::from_native(v.as_ptr() as i32 + v.len());
+					let #id = wasmer::WasmPtr::from_native(v.as_ptr() as i32 + v.len() as i32);
 					v.append(res_buf.to_le_bytes());
 
-					let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
+					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
 					let msg_len = v_bytes.len();
 
 					send_message(res_buf,
-								 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-								 WasmPtr::from_native((&msg_len as *const usize) as i32));
+								 wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32),
+								 wasmer::WasmPtr::from_native((&msg_len as *const usize) as i32));
 
-					let msg_kind = CString::new("write").expect("Invalid scheduler message kind encoding");
+					let msg_kind = std::ffi::CString::new("write").expect("Invalid scheduler message kind encoding");
 
 					for (i, b) in v_bytes.into_iter().enumerate() {
 						// Space for offset u32, and val u8
@@ -276,8 +275,8 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 						}
 
 						send_message(res_buf,
-									 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-									 WasmPtr::from_native((&write_args as *const u8) as i32));
+									 wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32),
+									 wasmer::WasmPtr::from_native((&write_args as *const u8) as i32));
 					}
 				})
 			};
@@ -327,14 +326,16 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut gen = quote! {
 		#extern_attrs
 		pub fn #msg_ident(#args) {
+			use vision_utils::actor::send_message;
+
 			#der
 
 			let arg = #inner_ident(#arg_names);
 
 			#ser
 
-			let handler_name = CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), arg);
+			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+			send_message(from, wasmer::WasmPtr::from_native(handler_name.as_ptr() as i32), arg);
 		}
 
 	};
@@ -342,12 +343,14 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let msg_name_vis = msg_name.to_string();
 	let args_ptr = arg_names[0].clone();
 
+	let msg_name_ident = Ident::new(msg_name, Span::call_site());
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>>> = std::sync::RwLock::new(None);
+			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>> = std::sync::RwLock::new(None);
 
 			#[macro_export]
 			macro_rules! #msg_macro_name {
@@ -360,13 +363,16 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 				}
 			}
 
-			pub fn #msg_name(to: vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+			pub fn #msg_name_ident(to: vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+				use wasmer::{WasmPtr, FromToNativeWasmType};
+				use vision_utils::actor::send_message;
+
 				#client_arg_ser
-				let msg_kind = CString::new(#msg_name_vis)
+				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
 				send_message(to,
-							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32),
 							 #args_ptr);
 
 				#msg_pipeline_name.write().unwrap().take()
@@ -376,17 +382,21 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub fn #msg_name(to: vision_utils::types::Address, #original_args) {
+			pub fn #msg_name_ident(to: vision_utils::types::Address, #original_args) {
+				use wasmer::{WasmPtr, FromToNativeWasmType};
+				use vision_utils::actor::send_message;
+
 				#client_arg_ser
-				let msg_kind = CString::new(#msg_name_vis)
+				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
 				send_message(to,
-							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 wasmer::WasmPtr::from_native(msg_kind.as_ptr() as i32),
 							 #args_ptr);
 			}
 		}
 	}
 
+	println!("{}", gen.to_string());
 	TokenStream::from(gen)
 }
