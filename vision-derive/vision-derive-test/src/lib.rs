@@ -1,15 +1,19 @@
-use vision_derive::with_result_message;
+use vision_derive::with_bindings;
 use vision_utils::types::Address;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct MyStruct {
-	val: u8,
+pub struct Ball {
+	pub ping: u32,
+	pub pong: u32,
 }
 
-#[with_result_message]
+#[with_bindings]
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub fn handle_structmsg(from: Address, arg: u8) -> Result<MyStruct, String> {
-	Ok(MyStruct { val: arg })
+pub fn handle_ping(from: Address, ball: Ball) -> Ball {
+	Ball {
+		ping: ball.ping,
+		pong: ball.pong + 1,
+	}
 }

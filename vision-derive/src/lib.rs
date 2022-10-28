@@ -254,6 +254,9 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 					let v_bytes = to_vec(&#id).unwrap();
 
+					let #id = WasmPtr::from_native(v.as_ptr() as i32 + v.len());
+					v.append(res_buf.to_le_bytes());
+
 					let msg_kind = CString::new("grow").expect("Invalid scheduler message kind encoding");
 					let msg_len = v_bytes.len();
 
@@ -276,8 +279,6 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 									 WasmPtr::from_native(msg_kind.as_ptr() as i32),
 									 WasmPtr::from_native((&write_args as *const u8) as i32));
 					}
-
-					let #id = WasmPtr::from_native((&res_buf as *const u32) as i32);
 				})
 			};
 
@@ -293,12 +294,12 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let (ser, arg_type) = match input.sig.output {
 		ReturnType::Default => gen_ser(iter::empty()),
 		ReturnType::Type(_, ty) => {
-			ser_type = Some(ty);
+			ser_type = Some(*ty.clone());
 			gen_ser(iter::once(PatType {
 				attrs: Vec::new(),
 				pat: parse_quote! {arg},
 				colon_token: Colon::default(),
-				ty,
+				ty: ty.clone(),
 			}))
 		}
 	};
@@ -307,18 +308,18 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
-	if let Some(arg_type) = arg_type.get(0).map(|&op| op).flatten() {
-		ret_type = Some(arg_type);
+	if let Some(arg_type) = arg_type.get(0).cloned().flatten() {
+		ret_type = Some(arg_type.clone());
 		ret_handler_args.push_value(PatType {
 			attrs: Vec::new(),
 			pat: parse_quote! {arg},
 			colon_token: Colon::default(),
-			ty: Box::new(Type::Path(arg_type)),
+			ty: Box::new(Type::Path(arg_type.clone())),
 		})
 	}
 
 	let ret_der = gen_der(ret_handler_args.into_iter(), None);
-	let (client_arg_ser, _) = gen_ser(original_args.into_iter().skip(1));
+	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter().skip(1));
 
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
@@ -335,7 +336,11 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 			let handler_name = CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
 			send_message(from, WasmPtr::from_native(handler_name.as_ptr() as i32), arg);
 		}
+
 	};
+
+	let msg_name_vis = msg_name.to_string();
+	let args_ptr = arg_names[0].clone();
 
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
@@ -354,9 +359,20 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					}
 				}
 			}
+
+			pub fn #msg_name(to: vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+				#client_arg_ser
+				let msg_kind = CString::new(#msg_name_vis)
+					.expect("Invalid scheduler message kind encoding");
+
+				send_message(to,
+							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
+							 #args_ptr);
+
+				#msg_pipeline_name.write().unwrap().take()
+			}
 		}
 	} else {
-		let msg_name_vis = msg_name.to_string();
 		gen = quote! {
 			#gen
 
@@ -367,7 +383,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 				send_message(to,
 							 WasmPtr::from_native(msg_kind.as_ptr() as i32),
-							 #arg_names);
+							 #args_ptr);
 			}
 		}
 	}
