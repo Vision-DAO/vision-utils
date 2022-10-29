@@ -142,7 +142,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 							// or the results buffer isn't expanding
 							let cell = #pat;
 							let msg_kind = std::ffi::CString::new("read").expect("Internal allocator error");
-							let msg_name = wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
+							let msg_name: WasmPtr<u8, Array> = wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
@@ -225,7 +225,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+							let #id: WasmPtr<u8, Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 							v.append(#id.to_le_bytes());
 						})
 					}
@@ -250,7 +250,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 					let v_bytes = to_vec(&#id).unwrap();
 
-					let #id = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+					let #id: WasmPtr<u8, Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 					v.append(res_buf.to_le_bytes());
 
 					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
