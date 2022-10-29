@@ -225,9 +225,9 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = v.as_ptr() as i32 + v.len() as i32;
-							v.append(#id.to_le_bytes());
+							let mut bytes = (v.as_ptr() as i32 + v.len() as i32).to_le_bytes();
 							let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+							v.append(Vec::from(&mut bytes));
 						})
 					}
 					_ => {
@@ -251,9 +251,9 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 					let v_bytes = to_vec(&#id).unwrap();
 
-					let #id = v.as_ptr() as i32 + v.len() as i32;
-					v.append(res_buf.to_le_bytes());
+					let mut bytes = (v.as_ptr() as i32 + v.len() as i32).to_le_bytes();
 					let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+					v.append(Vec::from(&mut bytes));
 
 					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
 					let msg_len = v_bytes.len();
