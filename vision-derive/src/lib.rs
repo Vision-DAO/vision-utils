@@ -19,6 +19,16 @@ use syn::{
 /// non-copy parameters to memory cells (see allocator service)
 #[proc_macro_attribute]
 pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
+	let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
+	let alloc_module: Path = if alloc_module.len() > 0 {
+		parse_quote!(self)
+	} else {
+		parse_quote!(beacon_dao_allocator)
+	};
+	let alloc_module = alloc_module
+		.get_ident()
+		.expect("Unable to parse allocator module path");
+
 	let mut input: ItemFn = parse(input).unwrap();
 
 	// The function must be a message handler: it must have a handle_ prefix
@@ -93,6 +103,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	fn gen_der(
 		args_iter: impl Iterator<Item = PatType>,
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
+		alloc_module: &Ident,
 	) -> TokenStream2 {
 		// Use serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -146,7 +157,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							for i in 0..u32::MAX {
 								send_message(cell, msg_name, wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
 
-								if let Some(next) = #alloc_read.write().unwrap().take() {
+								if let Some(next) = #alloc_module::PIPELINE_READ.write().unwrap().take() {
 									buf.push(next);
 								} else {
 									break;
@@ -175,14 +186,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	fn gen_ser(
 		args_iter: impl Iterator<Item = PatType> + Clone,
+		alloc_module: &Ident,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
-		let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
-		let alloc_read: Ident = if alloc_module.len() > 0 {
-			(parse_quote!(self::PIPELINE_READ),)
-		} else {
-			(parse_quote!(beacon_dao_allocator::PIPELINE_READ),)
-		};
-
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
 		let args_iter = args_iter
@@ -248,11 +253,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					send_message(vision_utils::types::ALLOCATOR_ADDR,
 								 wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
 								 wasmer::FromToNativeWasmType::from_native((&init_size as *const u32) as i32));
-					let res_buf = #alloc_allocate.write().unwrap().take().unwrap().unwrap();
+					let res_buf = #alloc_module::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
 
 					use serde_json::to_vec;
 					use serde::Serialize;
-					use vision_utils::actor::{address};
 
 					let v_bytes = to_vec(&#id).unwrap();
 
@@ -295,19 +299,22 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty()),
+		ReturnType::Default => gen_ser(iter::empty(), alloc_module),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
-			gen_ser(iter::once(PatType {
-				attrs: Vec::new(),
-				pat: parse_quote! {arg},
-				colon_token: Colon::default(),
-				ty: ty.clone(),
-			}))
+			gen_ser(
+				iter::once(PatType {
+					attrs: Vec::new(),
+					pat: parse_quote! {arg},
+					colon_token: Colon::default(),
+					ty: ty.clone(),
+				}),
+				alloc_module,
+			)
 		}
 	};
 
-	let der = gen_der(args_iter, Some(&mut args));
+	let der = gen_der(args_iter, Some(&mut args), alloc_module);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -321,8 +328,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 	}
 
-	let ret_der = gen_der(ret_handler_args.into_iter(), None);
-	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter());
+	let ret_der = gen_der(ret_handler_args.into_iter(), None, alloc_module);
+	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter(), alloc_module);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
