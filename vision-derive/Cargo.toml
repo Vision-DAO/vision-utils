@@ -9,6 +9,7 @@ workspace = ["vision-derive-test"]
 
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
+beacon_dao-allocator = { git = "ssh://git@github.com/Vision-DAO/beacon-dao.git"}
 proc-macro2 = "1.0.46"
 quote = "1.0"
 itertools = "0.10.5"

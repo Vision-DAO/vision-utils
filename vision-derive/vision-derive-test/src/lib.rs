@@ -9,7 +9,7 @@ pub struct Ball {
 	pub pong: u32,
 }
 
-#[with_bindings(self)]
+#[with_bindings]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn handle_ping(from: Address, ball: Ball) -> Ball {
 	Ball {
