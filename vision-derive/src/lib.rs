@@ -316,6 +316,17 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let ret_der = gen_der(ret_handler_args.into_iter(), None);
 	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter());
+
+	let further_processing = match arg_type.get(0).cloned().flatten() {
+		Some(_) => quote! {
+			#ser
+
+			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+			send_message(from, wasmer::FromToNativeWasmType::from_native(handler_name.as_ptr() as i32), arg);
+		},
+		None => quote! {},
+	};
+
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
@@ -328,10 +339,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 			let arg = #inner_ident(#arg_names);
 
-			#ser
-
-			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			send_message(from, wasmer::FromToNativeWasmType::from_native(handler_name.as_ptr() as i32), arg);
+			#further_processing
 		}
 
 		#input
