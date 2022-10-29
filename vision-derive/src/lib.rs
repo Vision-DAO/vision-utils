@@ -212,7 +212,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			{
 				"i8" | "u8" => 1,
 				"i16" | "u16" => 2,
-				"i64" | "u64" => 6,
+				"i64" | "u64" => 8,
 				_ => 4, // Address (and anything serialied to an address), i32, u32
 			}
 		});
