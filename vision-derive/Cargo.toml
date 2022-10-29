@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 vision-derive-internal = { path = "../vision-derive-internal" }
-beacon_dao_allocator = { name = "beacon_dao-allocator", git = "ssh://git@github.com/Vision-DAO/beacon-dao.git" }
+beacon_dao_allocator = { package = "beacon_dao-allocator", git = "ssh://git@github.com/Vision-DAO/beacon-dao.git" }
