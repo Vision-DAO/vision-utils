@@ -227,6 +227,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 						Some(quote! {
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							v.append(#id.to_le_bytes());
+							let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 						})
 					}
 					_ => {
@@ -252,6 +253,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 					let #id = v.as_ptr() as i32 + v.len() as i32;
 					v.append(res_buf.to_le_bytes());
+					let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 
 					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
 					let msg_len = v_bytes.len();
