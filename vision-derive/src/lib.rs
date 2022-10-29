@@ -210,10 +210,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				.to_string()
 				.as_str()
 			{
-				"i8" | "u8" => 8,
-				"i16" | "u16" => 16,
-				"i64" | "u64" => 64,
-				_ => 32, // Address (and anything serialied to an address), i32, u32
+				"i8" | "u8" => 1,
+				"i16" | "u16" => 2,
+				"i64" | "u64" => 6,
+				_ => 4, // Address (and anything serialied to an address), i32, u32
 			}
 		});
 
