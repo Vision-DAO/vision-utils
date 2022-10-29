@@ -3,12 +3,6 @@ name = "vision-derive"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-proc-macro = true
-workspace = ["vision-derive-test"]
-
 [dependencies]
-syn = { version = "1.0", features = ["full"] }
-proc-macro2 = "1.0.46"
-quote = "1.0"
-itertools = "0.10.5"
+vision-derive-internal = { path = "../vision-derive-internal" }
+beacon_dao-allocator = { git = "ssh://git@github.com/Vision-DAO/beacon-dao.git" }
