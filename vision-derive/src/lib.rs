@@ -3,9 +3,9 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use std::iter;
 use syn::{
-	parse, parse_quote, punctuated::Punctuated, token::Colon, token::Comma, Expr, ExprPath, FnArg,
-	Ident, ItemFn, Pat, PatIdent, PatType, Path, PathArguments, PathSegment, ReturnType, Type,
-	TypePath,
+	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
+	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
+	PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 
 /// For a message handler, generates:
@@ -18,7 +18,7 @@ use syn::{
 /// and accepts only simple copy types). This is achieved by serializing
 /// non-copy parameters to memory cells (see allocator service)
 #[proc_macro_attribute]
-pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut input: ItemFn = parse(input).unwrap();
 
 	// The function must be a message handler: it must have a handle_ prefix
@@ -140,13 +140,13 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 							// or the results buffer isn't expanding
 							let cell = #pat;
 							let msg_kind = std::ffi::CString::new("read").expect("Internal allocator error");
-							let msg_name: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
+							let msg_name: wasmer::WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
 								send_message(cell, msg_name, wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
 
-								if let Some(next) = beacon_dao_allocator::PIPELINE_READ.write().unwrap().take() {
+								if let Some(next) = #alloc_read.write().unwrap().take() {
 									buf.push(next);
 								} else {
 									break;
@@ -176,6 +176,13 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	fn gen_ser(
 		args_iter: impl Iterator<Item = PatType> + Clone,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
+		let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
+		let alloc_read: Ident = if alloc_module.len() > 0 {
+			(parse_quote!(self::PIPELINE_READ),)
+		} else {
+			(parse_quote!(beacon_dao_allocator::PIPELINE_READ),)
+		};
+
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
 		let args_iter = args_iter
@@ -224,7 +231,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
 							let mut bytes = Vec::from((v.as_ptr() as i32 + v.len() as i32).to_le_bytes());
-							let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+							let #id: wasmer::WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 							v.append(&mut bytes);
 						})
 					}
@@ -241,7 +248,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					send_message(vision_utils::types::ALLOCATOR_ADDR,
 								 wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
 								 wasmer::FromToNativeWasmType::from_native((&init_size as *const u32) as i32));
-					let res_buf = beacon_dao_allocator::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
+					let res_buf = #alloc_allocate.write().unwrap().take().unwrap().unwrap();
 
 					use serde_json::to_vec;
 					use serde::Serialize;
@@ -250,7 +257,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					let v_bytes = to_vec(&#id).unwrap();
 
 					let mut bytes = Vec::from((v.as_ptr() as i32 + v.len() as i32).to_le_bytes());
-					let #id: WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+					let #id: wasmer::WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 					v.append(&mut bytes);
 
 					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
