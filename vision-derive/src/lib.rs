@@ -136,8 +136,6 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 						let #pat = {
 							use serde_json::to_vec;
-							use beacon_dao_allocator::PIPELINE;
-
 							// Read until a } character is encoutnered (this should be JSON)
 							// or the results buffer isn't expanding
 							let cell = #pat;
@@ -148,7 +146,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 							for i in 0..u32::MAX {
 								send_message(cell, msg_name, wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
 
-								if let Some(next) = PIPELINE.write().unwrap().take() {
+								if let Some(next) = beacon_dao_allocator::PIPELINE_READ.write().unwrap().take() {
 									buf.push(next);
 								} else {
 									break;
@@ -243,7 +241,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 					send_message(vision_utils::types::ALLOCATOR_ADDR,
 								 wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
 								 wasmer::FromToNativeWasmType::from_native((&init_size as *const u32) as i32));
-					let res_buf = ALLOC_RESULT.write().unwrap().take().unwrap().unwrap();
+					let res_buf = beacon_dao_allocator::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
 
 					use serde_json::to_vec;
 					use serde::Serialize;
