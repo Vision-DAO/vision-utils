@@ -235,7 +235,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let mut bytes = Vec::from((v.as_ptr() as i32 + v.len() as i32).to_le_bytes());
+							let mut bytes = Vec::from(#id.to_le_bytes());
 							let #id: wasmer::WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 							v.append(&mut bytes);
 						})
@@ -258,11 +258,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					use serde_json::to_vec;
 					use serde::Serialize;
 
-					let v_bytes = to_vec(&#id).unwrap();
+					let mut v_bytes = to_vec(&#id).unwrap();
 
-					let mut bytes = Vec::from((v.as_ptr() as i32 + v.len() as i32).to_le_bytes());
 					let #id: wasmer::WasmPtr<u8, wasmer::Array> = wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
-					v.append(&mut bytes);
+					v.append(&mut v_bytes);
 
 					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
 					let msg_len = v_bytes.len();
