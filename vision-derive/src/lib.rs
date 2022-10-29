@@ -315,8 +315,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let ret_der = gen_der(ret_handler_args.into_iter(), None);
-	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter().skip(1));
-
+	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter());
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
@@ -394,6 +393,5 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 		}
 	}
 
-	println!("{}", gen.to_string());
 	TokenStream::from(gen)
 }
