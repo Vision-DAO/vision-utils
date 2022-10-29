@@ -339,7 +339,7 @@ pub fn with_bindings(_args: TokenStream, input: TokenStream) -> TokenStream {
 	};
 
 	let msg_name_vis = msg_name.to_string();
-	let args_ptr = arg_names[0].clone();
+	let args_ptr = arg_names[1].clone();
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
