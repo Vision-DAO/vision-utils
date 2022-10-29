@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["vision-derive-internal/vision-derive-test", "vision-derive-internal", "vision-derive"]
+members = ["vision-derive-internal", "vision-derive-internal", "vision-derive"]
 
 [dependencies]
 wasmer = { version = "2.3.0", features = ["js", "std", "wasm-types-polyfill"], default-features = false }
