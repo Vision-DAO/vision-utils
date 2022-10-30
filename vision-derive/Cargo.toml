@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 vision-derive-internal = { path = "../vision-derive-internal" }
 beacon_dao_allocator = { package = "beacon_dao-allocator", git = "ssh://git@github.com/Vision-DAO/beacon-dao.git" }
+vision-utils = { path = "../" }
+wasmer = { version = "2.3.0", features = ["js", "std", "wasm-types-polyfill"], default-features = false }
+serde-json = "1.0.87"
