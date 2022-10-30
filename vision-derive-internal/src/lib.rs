@@ -29,7 +29,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		)
 	};
 
-	println!("{extern_crate_pre}");
+	println!("{:?}", extern_crate_pre);
 	let mut input: ItemFn = parse(input).unwrap();
 
 	// The function must be a message handler: it must have a handle_ prefix
