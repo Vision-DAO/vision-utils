@@ -29,6 +29,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		)
 	};
 
+	println!("{extern_crate_pre}");
 	let mut input: ItemFn = parse(input).unwrap();
 
 	// The function must be a message handler: it must have a handle_ prefix
@@ -260,7 +261,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let res_buf = #alloc_module::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
 
 					use #extern_crate_pre::serde_json::to_vec;
-					use serde::Serialize;
+					use #extern_crate_pre::serde::Serialize;
 
 					let mut v_bytes = to_vec(&#id).unwrap();
 
