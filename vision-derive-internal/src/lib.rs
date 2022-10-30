@@ -21,7 +21,7 @@ use syn::{
 pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
 	let (alloc_module, extern_crate_pre): (Path, Path) = if alloc_module.len() > 0 {
-		(parse_quote!(self), parse_quote!(self))
+		(parse_quote!(self), parse_quote!(crate))
 	} else {
 		(
 			parse_quote!(::vision_derive::beacon_dao_allocator),
