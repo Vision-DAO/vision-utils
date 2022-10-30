@@ -20,13 +20,10 @@ use syn::{
 #[proc_macro_attribute]
 pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
-	let (alloc_module, extern_crate_prefix): (Path, Path) = if alloc_module.len() > 0 {
-		(parse_quote!(self), parse_quote!(crate::))
+	let alloc_module: Path = if alloc_module.len() > 0 {
+		parse_quote!(self)
 	} else {
-		(
-			parse_quote!(::vision_derive::beacon_dao_allocator),
-			parse_quote!(::vision_derive),
-		)
+		parse_quote!(::vision_derive::beacon_dao_allocator)
 	};
 
 	let mut input: ItemFn = parse(input).unwrap();
@@ -104,9 +101,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		args_iter: impl Iterator<Item = PatType>,
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
 		alloc_module: &Path,
-		extern_crate_prefix: &Path,
 	) -> TokenStream2 {
-		// Use #extern_crate_prefix::serde_json to deserialize the parameters of the function
+		// Use ::vision_derive::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
 		let arg_types_iter = args_iter
 			.map(|arg| {
@@ -147,16 +143,16 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						#der
 
 						let #pat = {
-							use #extern_crate_prefix::serde_json::to_vec;
+							use ::vision_derive::serde_json::to_vec;
 							// Read until a } character is encoutnered (this should be JSON)
 							// or the results buffer isn't expanding
 							let cell = #pat;
 							let msg_kind = std::ffi::CString::new("read").expect("Internal allocator error");
-							let msg_name: #extern_crate_prefix::wasmer::WasmPtr<u8, #extern_crate_prefix::wasmer::Array> = #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
+							let msg_name: ::vision_derive::wasmer::WasmPtr<u8, ::vision_derive::wasmer::Array> = ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
-								send_message(cell, msg_name, #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
+								send_message(cell, msg_name, ::vision_derive::wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
 
 								if let Some(Ok(next)) = #alloc_module::PIPELINE_READ.write().unwrap().take() {
 									buf.push(next);
@@ -166,7 +162,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							// This should not happen, since the wrapper method being used conforms to this practice
-							#extern_crate_prefix::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
+							::vision_derive::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
 						};
 					};
 
@@ -174,7 +170,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					if let Some(ref mut args) = args {
 						if let FnArg::Typed(ref mut typed_arg) = args[i] {
 							typed_arg.ty = parse_quote! {
-								#extern_crate_prefix::vision_utils::types::Address
+								::vision_derive::vision_utils::types::Address
 							};
 						}
 					}
@@ -188,7 +184,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	fn gen_ser(
 		args_iter: impl Iterator<Item = PatType> + Clone,
 		alloc_module: &Path,
-		extern_crate_prefix: &Path,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -238,14 +233,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
 							let mut bytes = Vec::from(#id.to_le_bytes());
-							let #id: #extern_crate_prefix::wasmer::WasmPtr<u8, #extern_crate_prefix::wasmer::Array> = #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+							let #id: ::vision_derive::wasmer::WasmPtr<u8, ::vision_derive::wasmer::Array> = ::vision_derive::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 							drop(&#id);
 
 							v.append(&mut bytes);
 						})
 					}
 					_ => {
-						type_buf.push(Some(parse_quote! {#extern_crate_prefix::vision_utils::types::Address}));
+						type_buf.push(Some(parse_quote! {::vision_derive::vision_utils::types::Address}));
 						None
 					}
 				}
@@ -254,17 +249,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					// Allocate a memory cell for the value
 					let init_size: u32 = 0;
 					let msg_kind = std::ffi::CString::new("allocate").expect("Internal allocator error");
-					send_message(#extern_crate_prefix::vision_utils::types::ALLOCATOR_ADDR,
-								 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
-								 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native((&init_size as *const u32) as i32));
+					send_message(::vision_derive::vision_utils::types::ALLOCATOR_ADDR,
+								 ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
+								 ::vision_derive::wasmer::FromToNativeWasmType::from_native((&init_size as *const u32) as i32));
 					let res_buf = #alloc_module::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
 
-					use #extern_crate_prefix::serde_json::to_vec;
+					use ::vision_derive::serde_json::to_vec;
 					use serde::Serialize;
 
 					let mut v_bytes = to_vec(&#id).unwrap();
 
-					let #id: #extern_crate_prefix::wasmer::WasmPtr<u8, #extern_crate_prefix::wasmer::Array> = #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+					let #id: ::vision_derive::wasmer::WasmPtr<u8, ::vision_derive::wasmer::Array> = ::vision_derive::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 					drop(&#id);
 
 					v.append(&mut v_bytes);
@@ -273,8 +268,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let msg_len = v_bytes.len();
 
 					send_message(res_buf,
-								 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
-								 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native((&msg_len as *const usize) as i32));
+								 ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
+								 ::vision_derive::wasmer::FromToNativeWasmType::from_native((&msg_len as *const usize) as i32));
 
 					let msg_kind = std::ffi::CString::new("write").expect("Invalid scheduler message kind encoding");
 
@@ -288,8 +283,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						}
 
 						send_message(res_buf,
-									 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
-									 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native((&write_args as *const u8) as i32));
+									 ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
+									 ::vision_derive::wasmer::FromToNativeWasmType::from_native((&write_args as *const u8) as i32));
 					}
 				})
 			};
@@ -304,7 +299,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_prefix),
+		ReturnType::Default => gen_ser(iter::empty(), &alloc_module),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
 			gen_ser(
@@ -315,17 +310,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					ty: ty.clone(),
 				}),
 				&alloc_module,
-				&extern_crate_prefix,
 			)
 		}
 	};
 
-	let der = gen_der(
-		args_iter,
-		Some(&mut args),
-		&alloc_module,
-		&extern_crate_prefix,
-	);
+	let der = gen_der(args_iter, Some(&mut args), &alloc_module);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -339,24 +328,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 	}
 
-	let ret_der = gen_der(
-		ret_handler_args.into_iter(),
-		None,
-		&alloc_module,
-		&extern_crate_prefix,
-	);
-	let (client_arg_ser, _) = gen_ser(
-		original_args.clone().into_iter(),
-		&alloc_module,
-		&extern_crate_prefix,
-	);
+	let ret_der = gen_der(ret_handler_args.into_iter(), None, &alloc_module);
+	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter(), &alloc_module);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
 			#ser
 
 			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			send_message(from, #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(handler_name.as_ptr() as i32), arg);
+			send_message(from, ::vision_derive::wasmer::FromToNativeWasmType::from_native(handler_name.as_ptr() as i32), arg);
 		},
 		None => quote! {},
 	};
@@ -367,7 +347,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut gen = quote! {
 		#extern_attrs
 		pub fn #msg_ident(#args) {
-			use #extern_crate_prefix::vision_utils::actor::send_message;
+			use ::vision_derive::vision_utils::actor::send_message;
 
 			#der
 
@@ -394,23 +374,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#[macro_export]
 			macro_rules! #msg_macro_name {
 				() => {
-					pub fn #msg_ret_handler_name(from: #extern_crate_prefix::vision_utils::types::Address, arg: #ret_type) {
+					pub fn #msg_ret_handler_name(from: ::vision_derive::vision_utils::types::Address, arg: #ret_type) {
 						#ret_der
 						#msg_pipeline_name.write().unwrap().replace(arg);
 					}
 				}
 			}
 
-			pub fn #msg_name_ident(to: #extern_crate_prefix::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
-				use #extern_crate_prefix::wasmer::{WasmPtr, FromToNativeWasmType};
-				use #extern_crate_prefix::vision_utils::actor::send_message;
+			pub fn #msg_name_ident(to: ::vision_derive::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+				use ::vision_derive::wasmer::{WasmPtr, FromToNativeWasmType};
+				use ::vision_derive::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
 				send_message(to,
-							 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
+							 ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
 							 #args_ptr);
 
 				#msg_pipeline_name.write().unwrap().take()
@@ -420,16 +400,16 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub fn #msg_name_ident(to: #extern_crate_prefix::vision_utils::types::Address, #original_args) {
-				use #extern_crate_prefix::wasmer::{WasmPtr, FromToNativeWasmType};
-				use #extern_crate_prefix::vision_utils::actor::send_message;
+			pub fn #msg_name_ident(to: ::vision_derive::vision_utils::types::Address, #original_args) {
+				use ::vision_derive::wasmer::{WasmPtr, FromToNativeWasmType};
+				use ::vision_derive::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
 				send_message(to,
-							 #extern_crate_prefix::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
+							 ::vision_derive::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32),
 							 #args_ptr);
 			}
 		}
