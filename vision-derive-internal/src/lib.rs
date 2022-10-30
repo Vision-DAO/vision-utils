@@ -25,9 +25,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	} else {
 		parse_quote!(::vision_derive::beacon_dao_allocator)
 	};
-	let alloc_module = alloc_module
-		.get_ident()
-		.expect("Unable to parse allocator module path");
 
 	let mut input: ItemFn = parse(input).unwrap();
 
@@ -103,7 +100,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	fn gen_der(
 		args_iter: impl Iterator<Item = PatType>,
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
-		alloc_module: &Ident,
+		alloc_module: &Path,
 	) -> TokenStream2 {
 		// Use serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -186,7 +183,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	fn gen_ser(
 		args_iter: impl Iterator<Item = PatType> + Clone,
-		alloc_module: &Ident,
+		alloc_module: &Path,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -302,7 +299,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty(), alloc_module),
+		ReturnType::Default => gen_ser(iter::empty(), &alloc_module),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
 			gen_ser(
@@ -312,12 +309,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					colon_token: Colon::default(),
 					ty: ty.clone(),
 				}),
-				alloc_module,
+				&alloc_module,
 			)
 		}
 	};
 
-	let der = gen_der(args_iter, Some(&mut args), alloc_module);
+	let der = gen_der(args_iter, Some(&mut args), &alloc_module);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -331,8 +328,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 	}
 
-	let ret_der = gen_der(ret_handler_args.into_iter(), None, alloc_module);
-	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter(), alloc_module);
+	let ret_der = gen_der(ret_handler_args.into_iter(), None, &alloc_module);
+	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter(), &alloc_module);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
