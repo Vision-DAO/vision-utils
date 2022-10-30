@@ -154,7 +154,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							for i in 0..u32::MAX {
 								send_message(cell, msg_name, ::vision_derive::wasmer::FromToNativeWasmType::from_native((&i as *const u32) as i32));
 
-								if let Some(next) = #alloc_module::PIPELINE_READ.write().unwrap().take() {
+								if let Some(Ok(next)) = #alloc_module::PIPELINE_READ.write().unwrap().take() {
 									buf.push(next);
 								} else {
 									break;
