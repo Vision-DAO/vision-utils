@@ -1,13 +1,9 @@
 use super::types::Address;
-use wasmer::{Array, WasmPtr};
+use wasmer::WasmPtr;
 
 extern "C" {
 	#[link_name = "send_message"]
-	fn send_message_raw(
-		addr: Address,
-		msg_name_buf: WasmPtr<u8, Array>,
-		msg_buf: WasmPtr<u8, Array>,
-	);
+	fn send_message_raw(addr: Address, msg_name_buf: WasmPtr<u8>, msg_buf: WasmPtr<u8>);
 
 	#[link_name = "address"]
 	fn address_raw() -> Address;
@@ -16,7 +12,7 @@ extern "C" {
 	fn spawn_actor_raw(addr: Address) -> Address;
 }
 
-pub fn send_message(addr: Address, msg_name_buf: WasmPtr<u8, Array>, msg_buf: WasmPtr<u8, Array>) {
+pub fn send_message(addr: Address, msg_name_buf: WasmPtr<u8>, msg_buf: WasmPtr<u8>) {
 	unsafe { send_message_raw(addr, msg_name_buf, msg_buf) }
 }
 

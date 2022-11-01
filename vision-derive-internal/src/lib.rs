@@ -158,7 +158,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							// or the results buffer isn't expanding
 							let cell = #pat;
 							let msg_kind = std::ffi::CString::new("read").expect("Internal allocator error");
-							let msg_name: #extern_crate_pre::wasmer::WasmPtr<u8, #extern_crate_pre::wasmer::Array> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
+							let msg_name: #extern_crate_pre::wasmer::WasmPtr<u8> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(msg_kind.as_ptr() as i32);
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
@@ -244,7 +244,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
 							let mut bytes = Vec::from(#id.to_le_bytes());
-							let #id: #extern_crate_pre::wasmer::WasmPtr<u8, #extern_crate_pre::wasmer::Array> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+							let #id: #extern_crate_pre::wasmer::WasmPtr<u8> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 							drop(&#id);
 
 							v.append(&mut bytes);
@@ -270,7 +270,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					let mut v_bytes = to_vec(&#id).unwrap();
 
-					let #id: #extern_crate_pre::wasmer::WasmPtr<u8, #extern_crate_pre::wasmer::Array> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
+					let #id: #extern_crate_pre::wasmer::WasmPtr<u8> = #extern_crate_pre::wasmer::FromToNativeWasmType::from_native(v.as_ptr() as i32 + v.len() as i32);
 					drop(&#id);
 
 					v.append(&mut v_bytes);
