@@ -5,6 +5,3 @@ edition = "2021"
 
 [workspace]
 members = ["vision-derive-internal", "vision-derive-internal", "vision-derive"]
-
-[dependencies]
-wasmer = { version = "3.0.0-rc.1", features = ["js", "std", "wasm-types-polyfill"], default-features = false }
