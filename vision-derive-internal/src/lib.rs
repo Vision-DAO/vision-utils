@@ -367,7 +367,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// response
 	let mut gen = quote! {
 		#extern_attrs
-		pub fn #msg_ident(#args) {
+		pub extern "C" fn #msg_ident(#args) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
@@ -395,7 +395,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#[macro_export]
 			macro_rules! #msg_macro_name {
 				() => {
-					pub fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
+					#[no_mangle]
+					pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
 						#ret_der
 						#msg_pipeline_name.write().unwrap().replace(arg);
 					}
