@@ -368,6 +368,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// and generate bindings that streamline sending the message, and getting a
 	// response
 	let mut gen = quote! {
+		#[cfg(feature = "module")]
 		#extern_attrs
 		pub extern "C" fn #msg_ident(#args) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
@@ -379,6 +380,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#further_processing
 		}
 
+		#[cfg(feature = "module")]
 		#input
 	};
 
