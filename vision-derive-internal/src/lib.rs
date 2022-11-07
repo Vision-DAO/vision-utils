@@ -412,7 +412,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				unsafe {
 					let msg = &format!("{}\n", msg_kind.as_ptr() as i32);
-					print(std::ptr::addr_of(msg) as i32);
+					print(std::ptr::addr_of!(msg) as i32);
 				}
 
 				send_message(to,
