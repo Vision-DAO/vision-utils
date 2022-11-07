@@ -256,7 +256,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
-					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
+					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap().unwrap();
 
 					use #extern_crate_pre::serde_json::to_vec;
 					use #extern_crate_pre::serde::Serialize;
@@ -268,11 +268,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					v.append(&mut v_bytes);
 
-					#alloc_module::grow(res_buf, v_bytes.len());
+					#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
 					for (i, b) in v_bytes.into_iter().enumerate() {
 						// Space for offset u32, and val u8
-						#alloc_module::write(res_buf, i, b);
+						#alloc_module::write(res_buf, i as u32, b);
 					}
 				})
 			};
