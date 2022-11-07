@@ -401,12 +401,16 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#gen
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
+				extern "C" {
+					fn print(s: &str);
+				}
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
+				print(&format!("{}\n", msg_kind.as_ptr() as i32));
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
