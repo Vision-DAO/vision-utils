@@ -402,7 +402,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
 				extern "C" {
-					fn print(s: &str);
+					fn print(s: i32);
 				}
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
@@ -411,7 +411,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.expect("Invalid scheduler message kind encoding");
 
 				unsafe {
-					print(&format!("{}\n", msg_kind.as_ptr() as i32));
+					let msg = &format!("{}\n", msg_kind.as_ptr() as i32);
+					print(std::ptr::addr_of(msg) as i32);
 				}
 
 				send_message(to,
