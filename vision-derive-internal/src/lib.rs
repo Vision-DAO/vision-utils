@@ -160,7 +160,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
-								if let Ok(res) = #alloc_module::read(cell, i) {
+								if let Some(Ok(res)) = #alloc_module::read(cell, i) {
 									buf.push(res);
 								} else {
 									break;
