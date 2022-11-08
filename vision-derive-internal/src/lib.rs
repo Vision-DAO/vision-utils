@@ -256,12 +256,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
-					let init_size: u32 = 0;
-					let msg_kind = std::ffi::CString::new("allocate").expect("Internal allocator error");
-					send_message(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR,
-								 msg_kind.as_ptr() as i32,
-								 (&init_size as *const u32) as i32);
-					let res_buf = #alloc_module::PIPELINE_ALLOCATE.write().unwrap().take().unwrap().unwrap();
+					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap().unwrap();
 
 					use #extern_crate_pre::serde_json::to_vec;
 					use #extern_crate_pre::serde::Serialize;
@@ -273,28 +268,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					v.append(&mut v_bytes);
 
-					let msg_kind = std::ffi::CString::new("grow").expect("Invalid scheduler message kind encoding");
-					let msg_len = v_bytes.len();
-
-					send_message(res_buf,
-								 msg_kind.as_ptr() as i32,
-								 (&msg_len as *const usize) as i32);
-
-					let msg_kind = std::ffi::CString::new("write").expect("Invalid scheduler message kind encoding");
 					#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
 					for (i, b) in v_bytes.into_iter().enumerate() {
 						// Space for offset u32, and val u8
-						let offset: [u8; 4] = (i as u32).to_le_bytes();
-						let mut write_args: [u8; 5] = [0, 0, 0, 0, b];
-
-						for (i, b) in offset.into_iter().enumerate() {
-							write_args[i] = b;
-						}
-
-						send_message(res_buf,
-									 msg_kind.as_ptr() as i32,
-									 (&write_args as *const u8) as i32);
+						#alloc_module::write(res_buf, i as u32, b);
 					}
 				})
 			};
