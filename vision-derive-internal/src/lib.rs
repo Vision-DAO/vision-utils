@@ -334,11 +334,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#ser
 
 			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			unsafe {
-				let msg = std::ffi::CString::new(format!("338 sending {}\n", handler_name.as_ptr() as i32)).unwrap();
-				print(4);
-			}
-
 			send_message(from, handler_name.as_ptr() as i32, arg);
 		},
 		None => quote! {},
@@ -351,10 +346,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "module")]
 		#extern_attrs
 		pub extern "C" fn #msg_ident(#args) {
-			extern "C" {
-				fn print(s: i32);
-			}
-
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
@@ -392,22 +383,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
-				extern "C" {
-					fn print(s: i32);
-				}
-
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("406 sending {}\n", msg_kind.as_ptr() as i32)).unwrap();
-					print(1);
-					print(unsafe { *(msg.as_ptr() as *const u8)} as i32);
-					print(msg.as_ptr() as i32);
-				}
 
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
@@ -421,19 +401,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#gen
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
-				extern "C" {
-					fn print(s: i32);
-				}
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("432 sending {}\n", msg_kind.as_ptr() as i32)).unwrap();
-					print(2);
-				}
 
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
