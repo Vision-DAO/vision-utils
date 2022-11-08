@@ -405,7 +405,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				unsafe {
 					let msg = std::ffi::CString::new(format!("406 sending {}\n", msg_kind.as_ptr() as i32)).unwrap();
 					print(1);
-					print(unsafe { *(msg.as_ptr() as *const u8)});
+					print(unsafe { *(msg.as_ptr() as *const u8)} as i32);
 					print(msg.as_ptr() as i32);
 				}
 
