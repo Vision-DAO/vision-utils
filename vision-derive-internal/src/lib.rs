@@ -160,7 +160,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
-								if let Some(res) = ::vision_derive::beacon_dao_allocator::read(cell, i) {
+								if let Some(res) = #alloc_module::read(cell, i) {
 									buf.push(res);
 								} else {
 									break;
