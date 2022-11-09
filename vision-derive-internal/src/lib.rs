@@ -256,7 +256,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
-					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap().unwrap();
+					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
 
 					use #extern_crate_pre::serde_json::to_vec;
 					use #extern_crate_pre::serde::Serialize;
