@@ -394,10 +394,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
-				extern "C" {
-					fn print(s: i32);
-				}
-
 				unsafe {
 					let msg = std::ffi::CString::new("432").unwrap();
 					print(msg.as_ptr() as i32);
