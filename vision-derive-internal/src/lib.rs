@@ -142,7 +142,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = Vec::new();
 
 							for i in 0..u32::MAX {
-								if let Some(Ok(res)) = ::vision_derive::beacon_dao_allocator::read(cell, i) {
+								if let Some(res) = ::vision_derive::beacon_dao_allocator::read(cell, i) {
 									buf.push(res);
 								} else {
 									break;
@@ -236,7 +236,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
-					let res_buf = ::vision_derive::beacon_dao_allocator::allocate(::vision_derive::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap().unwrap();
+					let res_buf = ::vision_derive::beacon_dao_allocator::allocate(::vision_derive::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
 
 					use ::vision_derive::serde_json::to_vec;
 					use ::vision_derive::serde::Serialize;
