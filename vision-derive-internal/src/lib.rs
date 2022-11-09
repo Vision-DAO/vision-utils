@@ -384,7 +384,21 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				() => {
 					#[no_mangle]
 					pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
+
+						extern "C" {
+							fn print(s: i32);
+						}
+
+						unsafe {
+							let msg = std::ffi::CString::new(#msg_name_vis).unwrap();
+							print(msg.as_ptr() as i32);
+						}
 						#ret_der
+
+						unsafe {
+							let msg = std::ffi::CString::new(format!("writing to pipeline {}",#msg_name_vis)).unwrap();
+							print(msg.as_ptr() as i32);
+						}
 						#msg_pipeline_name.write().unwrap().replace(arg);
 					}
 				}
