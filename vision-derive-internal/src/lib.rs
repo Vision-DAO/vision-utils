@@ -19,6 +19,22 @@ use syn::{
 /// non-copy parameters to memory cells (see allocator service)
 #[proc_macro_attribute]
 pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
+	let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
+	let (alloc_module, extern_crate_pre): (Path, Path) = if alloc_module.len() > 0 {
+		(
+			parse_quote!(self),
+			Path {
+				leading_colon: None,
+				segments: Punctuated::new(),
+			},
+		)
+	} else {
+		(
+			parse_quote!(::vision_derive::beacon_dao_allocator),
+			parse_quote!(::vision_derive),
+		)
+	};
+
 	let mut input: ItemFn = parse(input).unwrap();
 
 	// The function must be a message handler: it must have a handle_ prefix
@@ -93,8 +109,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	fn gen_der(
 		args_iter: impl Iterator<Item = PatType>,
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
+		alloc_module: &Path,
+		extern_crate_pre: &Path,
 	) -> TokenStream2 {
-		// Use ::vision_derive::serde_json to deserialize the parameters of the function
+		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
 		let arg_types_iter = args_iter
 			.map(|arg| {
@@ -135,7 +153,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						#der
 
 						let #pat = {
-							use ::vision_derive::serde_json::to_vec;
+							use #extern_crate_pre::serde_json::to_vec;
 							// Read until a } character is encoutnered (this should be JSON)
 							// or the results buffer isn't expanding
 							let cell = #pat;
@@ -150,7 +168,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							// This should not happen, since the wrapper method being used conforms to this practice
-							::vision_derive::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
+							#extern_crate_pre::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
 						};
 					};
 
@@ -158,7 +176,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					if let Some(ref mut args) = args {
 						if let FnArg::Typed(ref mut typed_arg) = args[i] {
 							typed_arg.ty = parse_quote! {
-								::vision_derive::vision_utils::types::Address
+								#extern_crate_pre::vision_utils::types::Address
 							};
 						}
 					}
@@ -171,6 +189,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	fn gen_ser(
 		args_iter: impl Iterator<Item = PatType> + Clone,
+		alloc_module: &Path,
+		extern_crate_pre: &Path,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -228,7 +248,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					}
 					_ => {
 						type_buf.push(Some(
-							parse_quote! {::vision_derive::vision_utils::types::Address},
+							parse_quote! {#extern_crate_pre::vision_utils::types::Address},
 						));
 						None
 					}
@@ -236,10 +256,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or(quote! {
 					// Allocate a memory cell for the value
-					let res_buf = ::vision_derive::beacon_dao_allocator::allocate(::vision_derive::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
+					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap().unwrap();
 
-					use ::vision_derive::serde_json::to_vec;
-					use ::vision_derive::serde::Serialize;
+					use #extern_crate_pre::serde_json::to_vec;
+					use #extern_crate_pre::serde::Serialize;
 
 					let mut v_bytes = to_vec(&#id).unwrap();
 
@@ -248,11 +268,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					v.append(&mut v_bytes);
 
-					::vision_derive::beacon_dao_allocator::grow(res_buf, v_bytes.len() as u32);
+					#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
 					for (i, b) in v_bytes.into_iter().enumerate() {
 						// Space for offset u32, and val u8
-						::vision_derive::beacon_dao_allocator::write(res_buf, i as u32, b);
+						#alloc_module::write(res_buf, i as u32, b);
 					}
 				})
 			};
@@ -267,19 +287,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty()),
+		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
-			gen_ser(iter::once(PatType {
-				attrs: Vec::new(),
-				pat: parse_quote! {arg},
-				colon_token: Colon::default(),
-				ty: ty.clone(),
-			}))
+			gen_ser(
+				iter::once(PatType {
+					attrs: Vec::new(),
+					pat: parse_quote! {arg},
+					colon_token: Colon::default(),
+					ty: ty.clone(),
+				}),
+				&alloc_module,
+				&extern_crate_pre,
+			)
 		}
 	};
 
-	let der = gen_der(args_iter, Some(&mut args));
+	let der = gen_der(args_iter, Some(&mut args), &alloc_module, &extern_crate_pre);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -293,8 +317,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 	}
 
-	let ret_der = gen_der(ret_handler_args.into_iter(), None);
-	let (client_arg_ser, _) = gen_ser(original_args.clone().into_iter());
+	let ret_der = gen_der(
+		ret_handler_args.into_iter(),
+		None,
+		&alloc_module,
+		&extern_crate_pre,
+	);
+	let (client_arg_ser, _) = gen_ser(
+		original_args.clone().into_iter(),
+		&alloc_module,
+		&extern_crate_pre,
+	);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
@@ -321,7 +354,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "module")]
 		#extern_attrs
 		pub extern "C" fn #msg_ident(#args) {
-			use ::vision_derive::vision_utils::actor::send_message;
+			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
 
@@ -350,15 +383,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			macro_rules! #msg_macro_name {
 				() => {
 					#[no_mangle]
-					pub extern "C" fn #msg_ret_handler_name(from: ::vision_derive::vision_utils::types::Address, arg: #ret_type) {
+					pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
 						#ret_der
 						#msg_pipeline_name.write().unwrap().replace(arg);
 					}
 				}
 			}
 
-			pub fn #msg_name_ident(to: ::vision_derive::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
-				use ::vision_derive::vision_utils::actor::send_message;
+			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
@@ -384,11 +417,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub fn #msg_name_ident(to: ::vision_derive::vision_utils::types::Address, #original_args) {
+			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
 				extern "C" {
 					fn print(s: i32);
 				}
-				use ::vision_derive::vision_utils::actor::send_message;
+				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
