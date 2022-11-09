@@ -386,7 +386,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			pub fn #msg_name_ident(to: ::vision_derive::vision_utils::types::Address, #original_args) {
 				extern "C" {
-					fn print(s: &str);
+					fn print(s: i32);
 				}
 				use ::vision_derive::vision_utils::actor::send_message;
 
