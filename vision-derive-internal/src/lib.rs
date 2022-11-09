@@ -372,6 +372,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
+	let uses_read = false;
+	let uses_allocate = false;
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
