@@ -300,7 +300,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		Some(_) => quote! {
 			#ser
 
+			extern "C" {
+				fn print(s: i32);
+			}
+
 			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+			unsafe {
+				let msg = std::ffi::CString::new(format!("responding to {} from {} (me)", from, #extern_crate_pre::vision_utils::actor::address())).unwrap();
+				print(msg.as_ptr() as i32);
+			}
 			send_message(from, handler_name.as_ptr() as i32, arg);
 		},
 		None => quote! {},
@@ -356,6 +364,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
+				extern "C" {
+					fn print(s: i32);
+				}
+
+				unsafe {
+					let msg = std::ffi::CString::new("405").unwrap();
+					print(msg.as_ptr() as i32);
+				}
+
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
@@ -377,8 +394,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
+				extern "C" {
+					fn print(s: i32);
+				}
+
 				unsafe {
-					print(&format!("{}\n", msg_kind.as_ptr() as i32));
+					let msg = std::ffi::CString::new("432").unwrap();
+					print(msg.as_ptr() as i32);
 				}
 
 				send_message(to,
@@ -390,4 +412,3 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	TokenStream::from(gen)
 }
- îlU  ±       ‡ıπïlU  Ä   
