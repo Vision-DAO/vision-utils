@@ -8,10 +8,6 @@ use syn::{
 	PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 
-// Guards that prevent allocate dependencies from being used twice
-static READ_USED: RwLock<bool> = RwLock::new(false);
-static ALLOC_USED: RwLock<bool> = RwLock::new(false);
-
 /// For a message handler, generates:
 /// - A rust binding for calling the method, and using it in a synchronous way
 /// - Macros for including message handlers that pipeline messages back to the
@@ -54,7 +50,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("PIPELINE_{}", msg_name.to_ascii_uppercase()),
 		Span::call_site(),
 	);
-	let msg_macro_name = Ident::new(&format!("use_{}", msg_name), Span::call_site());
 	let msg_ret_handler_name = Ident::new(&format!("handle_{}", msg_name), Span::call_site());
 
 	let msg_ident = input.sig.ident;
@@ -115,7 +110,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
-		mut uses_read: Option<&mut bool>,
 	) -> TokenStream2 {
 		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -154,10 +148,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					};
 				}
 				_ => {
-					if let Some(ref mut uses_read) = uses_read {
-						**uses_read = true;
-					}
-
 					der = quote! {
 						#der
 
@@ -200,7 +190,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		args_iter: impl Iterator<Item = PatType> + Clone,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
-		mut uses_allocate: Option<&mut bool>,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -265,10 +254,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or({
-					if let Some(ref mut uses_allocate) = uses_allocate {
-						**uses_allocate = true;
-					}
-
 					quote! {
 						// Allocate a memory cell for the value
 						let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
@@ -301,12 +286,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		(gen_buf, type_buf)
 	}
 
-	let mut uses_read = false;
-	let mut uses_allocate = false;
-
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre, None),
+		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
 			gen_ser(
@@ -318,18 +300,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}),
 				&alloc_module,
 				&extern_crate_pre,
-				None,
 			)
 		}
 	};
 
-	let der = gen_der(
-		args_iter,
-		Some(&mut args),
-		&alloc_module,
-		&extern_crate_pre,
-		None,
-	);
+	let der = gen_der(args_iter, Some(&mut args), &alloc_module, &extern_crate_pre);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -348,13 +323,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		None,
 		&alloc_module,
 		&extern_crate_pre,
-		Some(&mut uses_read),
 	);
 	let (client_arg_ser, _) = gen_ser(
 		original_args.clone().into_iter(),
 		&alloc_module,
 		&extern_crate_pre,
-		Some(&mut uses_allocate),
 	);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
@@ -400,38 +373,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
-	let mut macro_deps = TokenStream2::new();
-
-	if uses_read && !*READ_USED.read().unwrap() {
-		macro_deps = quote! {
-			#alloc_module::use_read!();
-		};
-		*READ_USED.write().unwrap().deref_mut() = true;
-	}
-
-	if uses_allocate && !*ALLOC_USED.read().unwrap() {
-		macro_deps = quote! {
-			#macro_deps
-			#alloc_module::use_allocate!();
-		};
-		*ALLOC_USED.write().unwrap().deref_mut() = true;
-	}
-
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
 			#gen
 
 			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>> = std::sync::RwLock::new(None);
-
-			#[macro_export]
-			macro_rules! #msg_macro_name {
-				() => {
-					#macro_deps
-
-					pub use $crate::#msg_ret_handler_name;
-				}
-			}
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
@@ -480,13 +427,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	} else {
 		gen = quote! {
 			#gen
-
-			#[macro_export]
-			macro_rules! #msg_macro_name {
-				() => {
-					#macro_deps
-				}
-			}
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
 				extern "C" {
