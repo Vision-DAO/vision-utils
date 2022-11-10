@@ -429,7 +429,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				() => {
 					#macro_deps
 
-					pub use #msg_ret_handler_name;
+					pub use $crate::#msg_ret_handler_name;
 				}
 			}
 
