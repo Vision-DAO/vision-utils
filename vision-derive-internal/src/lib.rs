@@ -471,6 +471,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
+			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>> = std::sync::RwLock::new(None);
+
 			#[macro_export]
 			macro_rules! #msg_macro_name {
 				() => {
