@@ -439,7 +439,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let msg = std::ffi::CString::new(format!("writing to pipeline {}",#msg_name_vis)).unwrap();
 							print(msg.as_ptr() as i32);
 						}
-						$crate::#msg_pipeline_name.write().unwrap().replace(arg);
+						#msg_pipeline_name.write().unwrap().replace(arg);
 					}
 				}
 			}
