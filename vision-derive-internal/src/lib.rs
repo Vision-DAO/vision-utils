@@ -1,12 +1,16 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::iter;
+use std::{iter, ops::DerefMut, sync::RwLock};
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
 	PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
+
+// Guards that prevent allocate dependencies from being used twice
+static READ_USED: RwLock<bool> = RwLock::new(false);
+static ALLOC_USED: RwLock<bool> = RwLock::new(false);
 
 /// For a message handler, generates:
 /// - A rust binding for calling the method, and using it in a synchronous way
@@ -50,6 +54,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("PIPELINE_{}", msg_name.to_ascii_uppercase()),
 		Span::call_site(),
 	);
+	let msg_macro_name = Ident::new(&format!("use_{}", msg_name), Span::call_site());
 	let msg_ret_handler_name = Ident::new(&format!("handle_{}", msg_name), Span::call_site());
 
 	let msg_ident = input.sig.ident;
@@ -395,6 +400,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
+	let mut macro_deps = TokenStream2::new();
+
+	if uses_read && !*READ_USED.read().unwrap() {
+		macro_deps = quote! {
+			#alloc_module::use_read!();
+		};
+		*READ_USED.write().unwrap().deref_mut() = true;
+	}
+
+	if uses_allocate && !*ALLOC_USED.read().unwrap() {
+		macro_deps = quote! {
+			#macro_deps
+			#alloc_module::use_allocate!();
+		};
+		*ALLOC_USED.write().unwrap().deref_mut() = true;
+	}
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
@@ -402,9 +424,19 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>> = std::sync::RwLock::new(None);
 
+			#[macro_export]
+			macro_rules! #msg_macro_name {
+				() => {
+					#macro_deps
+
+					pub use #msg_ret_handler_name;
+				}
+			}
+
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
 			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
+
 				extern "C" {
 					fn print(s: i32);
 				}
@@ -448,6 +480,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	} else {
 		gen = quote! {
 			#gen
+
+			#[macro_export]
+			macro_rules! #msg_macro_name {
+				() => {
+					#macro_deps
+				}
+			}
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
 				extern "C" {
