@@ -402,14 +402,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let mut macro_deps = TokenStream2::new();
 
-	if uses_read {
+	if uses_read && !*READ_USED.read().unwrap() {
 		macro_deps = quote! {
 			#alloc_module::use_read!();
 		};
 		*READ_USED.write().unwrap().deref_mut() = true;
 	}
 
-	if uses_allocate {
+	if uses_allocate && !*ALLOC_USED.read().unwrap() {
 		macro_deps = quote! {
 			#macro_deps
 			#alloc_module::use_allocate!();
