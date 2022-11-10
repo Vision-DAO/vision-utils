@@ -1,12 +1,16 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::iter;
+use std::{iter, ops::DerefMut, sync::RwLock};
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
 	PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
+
+// Guards that prevent allocate dependencies from being used twice
+static READ_USED: RwLock<bool> = RwLock::new(false);
+static ALLOC_USED: RwLock<bool> = RwLock::new(false);
 
 /// For a message handler, generates:
 /// - A rust binding for calling the method, and using it in a synchronous way
@@ -402,6 +406,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		macro_deps = quote! {
 			#alloc_module::use_read!();
 		};
+		*READ_USED.write().unwrap().deref_mut() = true;
 	}
 
 	if uses_allocate {
@@ -409,7 +414,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#macro_deps
 			#alloc_module::use_allocate!();
 		};
+		*ALLOC_USED.write().unwrap().deref_mut() = true;
 	}
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
