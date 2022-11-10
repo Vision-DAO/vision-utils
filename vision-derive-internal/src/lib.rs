@@ -471,6 +471,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
+			#[macro_export]
+			macro_rules! #msg_macro_name {
+				() => {
+					#macro_deps
+				}
+			}
+
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
 				extern "C" {
 					fn print(s: i32);
