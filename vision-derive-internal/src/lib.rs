@@ -111,6 +111,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
+		mut uses_read: Option<&mut bool>,
 	) -> TokenStream2 {
 		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -149,6 +150,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					};
 				}
 				_ => {
+					if let Some(ref mut uses_read) = uses_read {
+						**uses_read = true;
+					}
+
 					der = quote! {
 						#der
 
@@ -191,6 +196,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		args_iter: impl Iterator<Item = PatType> + Clone,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
+		mut uses_allocate: Option<&mut bool>,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -254,25 +260,31 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					}
 				}
 				// Otherwise, use serde to pass in a memory cell address
-				.unwrap_or(quote! {
-					// Allocate a memory cell for the value
-					let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
+				.unwrap_or({
+					if let Some(ref mut uses_allocate) = uses_allocate {
+						**uses_allocate = true;
+					}
 
-					use #extern_crate_pre::serde_json::to_vec;
-					use #extern_crate_pre::serde::Serialize;
+					quote! {
+						// Allocate a memory cell for the value
+						let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
 
-					let mut v_bytes = to_vec(&#id).unwrap();
+						use #extern_crate_pre::serde_json::to_vec;
+						use #extern_crate_pre::serde::Serialize;
 
-					let #id = v.as_ptr() as i32 + v.len() as i32;
-					drop(&#id);
+						let mut v_bytes = to_vec(&#id).unwrap();
 
-					v.append(&mut v_bytes);
+						let #id = v.as_ptr() as i32 + v.len() as i32;
+						drop(&#id);
 
-					#alloc_module::grow(res_buf, v_bytes.len() as u32);
+						v.append(&mut v_bytes);
 
-					for (i, b) in v_bytes.into_iter().enumerate() {
-						// Space for offset u32, and val u8
-						#alloc_module::write(res_buf, i as u32, b);
+						#alloc_module::grow(res_buf, v_bytes.len() as u32);
+
+						for (i, b) in v_bytes.into_iter().enumerate() {
+							// Space for offset u32, and val u8
+							#alloc_module::write(res_buf, i as u32, b);
+						}
 					}
 				})
 			};
@@ -285,9 +297,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		(gen_buf, type_buf)
 	}
 
+	let mut uses_read = false;
+	let mut uses_allocate = false;
+
 	let mut ser_type = None;
 	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
+		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre, None),
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
 			gen_ser(
@@ -299,11 +314,18 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}),
 				&alloc_module,
 				&extern_crate_pre,
+				None,
 			)
 		}
 	};
 
-	let der = gen_der(args_iter, Some(&mut args), &alloc_module, &extern_crate_pre);
+	let der = gen_der(
+		args_iter,
+		Some(&mut args),
+		&alloc_module,
+		&extern_crate_pre,
+		None,
+	);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -322,11 +344,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		None,
 		&alloc_module,
 		&extern_crate_pre,
+		Some(&mut uses_read),
 	);
 	let (client_arg_ser, _) = gen_ser(
 		original_args.clone().into_iter(),
 		&alloc_module,
 		&extern_crate_pre,
+		Some(&mut uses_allocate),
 	);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
@@ -372,9 +396,20 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
-	let uses_read = false;
-	let uses_allocate = false;
+	let mut macro_deps = TokenStream2::new();
 
+	if uses_read {
+		macro_deps = quote! {
+			#alloc_module::use_read!();
+		};
+	}
+
+	if uses_allocate {
+		macro_deps = quote! {
+			#macro_deps
+			#alloc_module::use_allocate!();
+		};
+	}
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
@@ -385,6 +420,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#[macro_export]
 			macro_rules! #msg_macro_name {
 				() => {
+					#macro_deps
+
 					#[no_mangle]
 					pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
 
