@@ -464,7 +464,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
 
-				$crate::#msg_pipeline_name.write().unwrap().take()
+				#msg_pipeline_name.write().unwrap().take()
 			}
 		}
 	} else {
