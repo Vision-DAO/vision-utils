@@ -383,7 +383,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: std::sync::RwLock<Option<#ser_type>> = std::sync::RwLock::new(None);
+			pub static #msg_pipeline_name: (Sender<#ser_type>, Receiver<#ser_type>) = std::sync::mpsc::channel();
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
@@ -403,7 +403,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let msg = std::ffi::CString::new(format!("writing to pipeline {}",#msg_name_vis)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
-				#msg_pipeline_name.write().unwrap().replace(arg);
+				#msg_pipeline_name.0.send(arg);
 			}
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
@@ -431,7 +431,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
-				let val = #msg_pipeline_name.write().unwrap().take();
+				let val = #msg_pipeline_name.1.recv().ok();
 
 				unsafe {
 					let msg = std::ffi::CString::new(format!("read from pipeline {}", #msg_name_vis)).unwrap();
