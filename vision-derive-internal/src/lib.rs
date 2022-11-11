@@ -258,6 +258,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// Allocate a memory cell for the value
 						let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
 
+						unsafe {
+							let msg = std::ffi::CString::new(format!("allocated cell {}", res_buf)).unwrap();
+							print(msg.as_ptr() as i32);
+						}
+
 						use #extern_crate_pre::serde_json::to_vec;
 						use #extern_crate_pre::serde::Serialize;
 
@@ -402,15 +407,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 
 			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+				extern "C" {
+					fn print(s: i32);
+				}
+
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
-
-				extern "C" {
-					fn print(s: i32);
-				}
 
 				unsafe {
 					let msg = std::ffi::CString::new("405").unwrap();
