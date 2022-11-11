@@ -383,7 +383,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: (Sender<#ser_type>, Receiver<#ser_type>) = std::sync::mpsc::channel();
+			pub static #msg_pipeline_name: (std::sync::mpsc::Sender<#ser_type>, std::sync::mpsc::Receiver<#ser_type>) = std::sync::mpsc::channel();
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
