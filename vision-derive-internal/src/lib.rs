@@ -434,7 +434,18 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
+				unsafe {
+					let msg = std::ffi::CString::new("serializing arguments for {}", #msg_name_vis).unwrap();
+					print(msg.as_ptr() as i32);
+				}
+
 				#client_arg_ser
+
+				unsafe {
+					let msg = std::ffi::CString::new("serialized arguments for {}", #msg_name_vis).unwrap();
+					print(msg.as_ptr() as i32);
+				}
+
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
 
