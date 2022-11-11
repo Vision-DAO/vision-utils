@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::{iter, ops::DerefMut, sync::RwLock};
+use std::iter;
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
@@ -421,7 +421,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
 
+				unsafe {
+					let msg = std::ffi::CString::new(format!("reading from pipeline {}", #msg_name_vis)).unwrap();
+					print(msg.as_ptr() as i32);
+				}
+
 				#msg_pipeline_name.write().unwrap().take()
+
+				unsafe {
+					let msg = std::ffi::CString::new(format!("read from pipeline {}", #msg_name_vis)).unwrap();
+					print(msg.as_ptr() as i32);
+				}
 			}
 		}
 	} else {
