@@ -426,12 +426,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
-				#msg_pipeline_name.write().unwrap().take()
+				let val = #msg_pipeline_name.write().unwrap().take();
 
 				unsafe {
 					let msg = std::ffi::CString::new(format!("read from pipeline {}", #msg_name_vis)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
+
+				val
 			}
 		}
 	} else {
