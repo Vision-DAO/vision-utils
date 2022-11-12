@@ -1,7 +1,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::iter;
+use std::{
+	iter,
+	sync::atomic::{AtomicU32, Ordering},
+};
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
@@ -110,6 +113,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		mut args: Option<&mut Punctuated<FnArg, Comma>>,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
+		mut callback: Option<TokenStream2>,
 	) -> TokenStream2 {
 		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
@@ -148,27 +152,37 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					};
 				}
 				_ => {
-					der = quote! {
-						#der
+					// Nest the callback after all arguments are deserialized
+					let callback = if i == 0 {
+						callback.take().unwrap_or(TokenStream2::new())
+					} else {
+						TokenStream2::new()
+					};
 
-						let #pat = {
-							use #extern_crate_pre::serde_json::to_vec;
-							// Read until a } character is encoutnered (this should be JSON)
-							// or the results buffer isn't expanding
-							let cell = #pat;
-							let mut buf = Vec::new();
+					der = quote! {
+						// Read until a } character is encoutnered (this should be JSON)
+						// or the results buffer isn't expanding
+						let cell = #pat;
+
+						#alloc_module::len(cell, |len| {
+							let mut buf = Arc::new(Mutex::new(Vec::new()));
+							let mut n_done = AtomicU32::new(0);
 
 							for i in 0..u32::MAX {
-								if let Some(res) = #alloc_module::read(cell, i) {
-									buf.push(res);
-								} else {
-									break;
-								}
-							}
+								buf.push(0);
 
-							// This should not happen, since the wrapper method being used conforms to this practice
-							#extern_crate_pre::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.")
-						};
+								let buf = buf.clone();
+								#alloc_module::read(cell, i, |val| {
+									buf.lock().unwrap()[i] = val;
+									if n_done.fetch_add(1, Ordering::SeqCst) == len {
+										// This should not happen, since the wrapper method being used conforms to this practice
+										let #pat = #extern_crate_pre::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.");
+										#der
+										#callback
+									}
+								});
+							}
+						});
 					};
 
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
@@ -256,7 +270,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				.unwrap_or({
 					quote! {
 						// Allocate a memory cell for the value
-						let res_buf = #alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, 0).unwrap();
+						let res_buf = #extern_crate_pre::vision_utils::actor::spawn_actor(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR);
 
 						unsafe {
 							let msg = std::ffi::CString::new(format!("allocated cell {}", res_buf)).unwrap();
@@ -297,19 +311,27 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		ReturnType::Type(_, ty) => {
 			ser_type = Some(*ty.clone());
 			gen_ser(
-				iter::once(PatType {
-					attrs: Vec::new(),
-					pat: parse_quote! {arg},
-					colon_token: Colon::default(),
-					ty: ty.clone(),
-				}),
+				vec![
+					PatType {
+						attrs: Vec::new(),
+						pat: parse_quote! {arg},
+						colon_token: Colon::default(),
+						ty: ty.clone(),
+					},
+					// Identify returns as a response to a particular message call
+					PatType {
+						attrs: Vec::new(),
+						pat: parse_quote! {msg_id},
+						colon_token: Colon::default(),
+						ty: parse_quote! {u32},
+					},
+				]
+				.into_iter(),
 				&alloc_module,
 				&extern_crate_pre,
 			)
 		}
 	};
-
-	let der = gen_der(args_iter, Some(&mut args), &alloc_module, &extern_crate_pre);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
@@ -320,17 +342,47 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			pat: parse_quote! {arg},
 			colon_token: Colon::default(),
 			ty: Box::new(Type::Path(arg_type.clone())),
-		})
+		});
 	}
+	ret_handler_args.push_value(PatType {
+		attrs: Vec::new(),
+		pat: parse_quote! {msg_id},
+		colon_token: Colon::default(),
+		ty: parse_quote! {u32},
+	});
+
+	let msg_name_vis = msg_name.to_string();
+
+	let client_return_deserialize_callback = quote! {
+		unsafe {
+			let msg = std::ffi::CString::new(format!("writing to pipeline {}", #msg_name_vis)).unwrap();
+			print(msg.as_ptr() as i32);
+		}
+
+		if let Some(callback) = #msg_pipeline_name.get(msg_id).flatten().take() {
+			callback(arg);
+		}
+	};
 
 	let ret_der = gen_der(
 		ret_handler_args.into_iter(),
 		None,
 		&alloc_module,
 		&extern_crate_pre,
+		Some(client_return_deserialize_callback),
 	);
 	let (client_arg_ser, _) = gen_ser(
-		original_args.clone().into_iter(),
+		{
+			let mut client_original_args = original_args.clone();
+			client_original_args.push(PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {msg_id},
+				colon_token: Colon::default(),
+				ty: parse_quote! {u32},
+			});
+			client_original_args
+		}
+		.into_iter(),
 		&alloc_module,
 		&extern_crate_pre,
 	);
@@ -356,24 +408,32 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
+	let deserialize_server_args_callback = quote! {
+		let arg = #inner_ident(#arg_names);
+
+		#further_processing
+	};
+	let der = gen_der(
+		args_iter,
+		Some(&mut args),
+		&alloc_module,
+		&extern_crate_pre,
+		Some(deserialize_server_args_callback),
+	);
+
 	let mut gen = quote! {
 		#[cfg(feature = "module")]
 		#extern_attrs
-		pub extern "C" fn #msg_ident(#args) {
+		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
-
-			let arg = #inner_ident(#arg_names);
-
-			#further_processing
 		}
 
 		#[cfg(feature = "module")]
 		#input
 	};
 
-	let msg_name_vis = msg_name.to_string();
 	let args_ptr = arg_names[1].clone();
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
@@ -383,11 +443,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: (std::sync::mpsc::SyncSender<#ser_type>, std::sync::mpsc::Receiver<#ser_type>) = std::sync::mpsc::sync_channel(0);
+			pub static #msg_pipeline_name: RwLock<Vec<Option<Box<dyn Fn(#ser_type)>>>> = RwLock::new(Vec::new());
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
-			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type) {
+			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type, msg_id: u32) {
 
 				extern "C" {
 					fn print(s: i32);
@@ -398,15 +458,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 				#ret_der
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("writing to pipeline {}",#msg_name_vis)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
-				#msg_pipeline_name.0.send(arg);
 			}
 
-			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) -> Option<#ser_type> {
+			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: Box<dyn Fn(#ser_type)>) {
 				extern "C" {
 					fn print(s: i32);
 				}
@@ -422,23 +476,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
+				#msg_pipeline_name.write().unwrap().push(Some(callback));
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("reading from pipeline {}", #msg_name_vis)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
-
-				let val = #msg_pipeline_name.1.recv().ok();
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("read from pipeline {}", #msg_name_vis)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
-
-				val
 			}
 		}
 	} else {
@@ -471,6 +512,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
+				#msg_pipeline_name.write().unwrap().push(None);
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
