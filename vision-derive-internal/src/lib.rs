@@ -8,7 +8,7 @@ use std::{
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
-	PathArguments, PathSegment, ReturnType, Type, TypePath,
+	PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
 };
 
 /// For a message handler, generates:
@@ -344,6 +344,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			ty: Box::new(Type::Path(arg_type.clone())),
 		});
 	}
+	ret_handler_args.push_punct(Comma::default());
 	ret_handler_args.push_value(PatType {
 		attrs: Vec::new(),
 		pat: parse_quote! {msg_id},
