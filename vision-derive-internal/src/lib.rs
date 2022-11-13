@@ -487,6 +487,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
+				let msg_id = {
+					let lock = #msg_pipeline_name.write().unwrap();
+					lock.push(Some(callback));
+					lock.len() - 1;
+				};
+
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
@@ -496,7 +502,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
-				#msg_pipeline_name.write().unwrap().push(Some(callback));
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
