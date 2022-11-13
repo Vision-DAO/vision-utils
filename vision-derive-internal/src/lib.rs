@@ -289,7 +289,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						drop(&#id);
 
 						let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
-						v.append(cell_addr_bytes);
+						v.append(&mut cell_addr_bytes);
 
 						#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
