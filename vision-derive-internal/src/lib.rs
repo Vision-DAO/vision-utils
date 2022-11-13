@@ -151,6 +151,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				_ => {
 					// Nest the callback after all arguments are deserialized
 					let callback = if i == 0 {
+						println!("{}", callback.is_some());
 						callback.take().unwrap_or(TokenStream2::new())
 					} else {
 						TokenStream2::new()
