@@ -471,7 +471,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
-			pub extern "C" fn #msg_ret_handler_name(, arg: #ret_type, msg_id: u32) {
+			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type, msg_id: u32) {
 
 				extern "C" {
 					fn print(s: i32);
