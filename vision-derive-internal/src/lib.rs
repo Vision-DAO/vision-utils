@@ -292,6 +292,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
+						unsafe {
+							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {}", v_bytes.len(), res_buf)).unwrap();
+							print(msg.as_ptr() as i32);
+						}
+
 						for (i, b) in v_bytes.into_iter().enumerate() {
 							// Space for offset u32, and val u8
 							#alloc_module::write(res_buf, i as u32, b);
