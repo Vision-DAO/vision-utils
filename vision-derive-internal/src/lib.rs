@@ -84,7 +84,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	println!("1");
 
-	let original_args: Punctuated<PatType, Comma> =
+	let mut original_args: Punctuated<PatType, Comma> =
 		Punctuated::from_iter(args_iter.clone().skip(1));
 
 	println!("2");
@@ -443,6 +443,21 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
+	// User arguments are prefixed by a to: Address arg
+	let proper_args = {
+		let mut buff = original_args.clone();
+		buff.insert(
+			0,
+			PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {from},
+				colon_token: Colon::default(),
+				ty: parse_quote! {#extern_crate_pre::vision_utils::types::Address},
+			},
+		);
+		buff
+	};
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
@@ -452,7 +467,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
-			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type, msg_id: u32) {
+			pub extern "C" fn #msg_ret_handler_name(, arg: #ret_type, msg_id: u32) {
 
 				extern "C" {
 					fn print(s: i32);
@@ -465,7 +480,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				#ret_der
 			}
 
-			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: std::sync::Arc<dyn Fn(#ser_type) + Send + Sync>) {
+			pub fn #msg_name_ident(#proper_args, callback: std::sync::Arc<dyn Fn(#ser_type) + Send + Sync>) {
 				extern "C" {
 					fn print(s: i32);
 				}
@@ -491,7 +506,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args) {
+			pub fn #msg_name_ident(#proper_args) {
 				extern "C" {
 					fn print(s: i32);
 				}
