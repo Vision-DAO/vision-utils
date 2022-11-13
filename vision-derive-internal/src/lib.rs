@@ -164,7 +164,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// or the results buffer isn't expanding
 						let cell = #pat;
 
-						#alloc_module::len(cell, std::sync::Arc::new(|len| {
+						#alloc_module::len(cell, std::sync::Arc::new(move |len| {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let mut n_done = std::sync::atomic::AtomicU32::new(0);
 
@@ -172,7 +172,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								buf.lock().unwrap().push(0);
 
 								let buf = buf.clone();
-								#alloc_module::read(cell, i, std::sync::Arc::new(|val| {
+								#alloc_module::read(cell, i, std::sync::Arc::new(move |val| {
 									buf.lock().unwrap()[i as usize] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
