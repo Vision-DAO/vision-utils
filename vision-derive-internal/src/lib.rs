@@ -343,8 +343,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			colon_token: Colon::default(),
 			ty: Box::new(Type::Path(arg_type.clone())),
 		});
+		ret_handler_args.push_punct(Comma::default());
 	}
-	ret_handler_args.push_punct(Comma::default());
 	ret_handler_args.push_value(PatType {
 		attrs: Vec::new(),
 		pat: parse_quote! {msg_id},
