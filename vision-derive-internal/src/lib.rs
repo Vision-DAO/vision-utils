@@ -165,7 +165,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						let cell = #pat;
 
 						#alloc_module::len(cell, |len| {
-							let mut buf = Arc::new(Mutex::new(Vec::new()));
+							let mut buf = std::sync::Arc::new(Mutex::new(Vec::new()));
 							let mut n_done = AtomicU32::new(0);
 
 							for i in 0..u32::MAX {
@@ -444,7 +444,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: RwLock<Vec<Option<Arc<dyn Fn(#ser_type) + Send + Sync>>>> = RwLock::new(Vec::new());
+			pub static #msg_pipeline_name: RwLock<Vec<Option<std::sync::Arc<dyn Fn(#ser_type) + Send + Sync>>>> = RwLock::new(Vec::new());
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
@@ -461,7 +461,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				#ret_der
 			}
 
-			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: Arc<dyn Fn(#ser_type) + Send + Sync>) {
+			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: std::sync::Arc<dyn Fn(#ser_type) + Send + Sync>) {
 				extern "C" {
 					fn print(s: i32);
 				}
