@@ -173,7 +173,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 									buf.lock().unwrap()[i as usize] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
-										let #pat = #extern_crate_pre::serde_json::from_slice(&buf.lock()).expect("Failed to deserialize input parameters.");
+										let #pat = #extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters.");
 										#der
 										#callback
 									}
