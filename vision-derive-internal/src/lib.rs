@@ -170,14 +170,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut n_done = std::sync::atomic::AtomicU32::new(0);
 
 							for i in 0..u32::MAX {
-								buf.push(0);
+								buf.lock().unwrap().push(0);
 
 								let buf = buf.clone();
 								#alloc_module::read(cell, i, |val| {
 									buf.lock().unwrap()[i] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
-										let #pat = #extern_crate_pre::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.");
+										let #pat = #extern_crate_pre::serde_json::from_slice(&buf.lock()).expect("Failed to deserialize input parameters.");
 										#der
 										#callback
 									}
