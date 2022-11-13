@@ -285,6 +285,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						let mut v_bytes = to_vec(&#id).unwrap();
 
+						unsafe {
+							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {} with value '{:?}'", v_bytes.len(), res_buf, #id)).unwrap();
+							print(msg.as_ptr() as i32);
+						}
+
 						let #id = v.as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
 
@@ -292,11 +297,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						v.append(&mut v_bytes);
 
 						#alloc_module::grow(res_buf, v_len as u32);
-
-						unsafe {
-							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {} with value '{:?}'", v_bytes.len(), res_buf, #id)).unwrap();
-							print(msg.as_ptr() as i32);
-						}
 
 						for (i, b) in v_bytes.into_iter().enumerate() {
 							// Space for offset u32, and val u8
