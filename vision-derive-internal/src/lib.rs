@@ -450,7 +450,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			0,
 			PatType {
 				attrs: Vec::new(),
-				pat: parse_quote! {from},
+				pat: parse_quote! {to},
 				colon_token: Colon::default(),
 				ty: parse_quote! {#extern_crate_pre::vision_utils::types::Address},
 			},
