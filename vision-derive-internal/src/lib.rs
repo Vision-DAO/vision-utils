@@ -1,14 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::{
-	iter,
-	sync::atomic::{AtomicU32, Ordering},
-};
+use std::iter;
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
-	PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
+	PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 
 /// For a message handler, generates:
@@ -170,7 +167,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::len(cell, |len| {
 							let mut buf = std::sync::Arc::new(Mutex::new(Vec::new()));
-							let mut n_done = AtomicU32::new(0);
+							let mut n_done = std::sync::atomic::AtomicU32::new(0);
 
 							for i in 0..u32::MAX {
 								buf.push(0);
@@ -178,7 +175,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								let buf = buf.clone();
 								#alloc_module::read(cell, i, |val| {
 									buf.lock().unwrap()[i] = val;
-									if n_done.fetch_add(1, Ordering::SeqCst) == len {
+									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
 										let #pat = #extern_crate_pre::serde_json::from_slice(&buf).expect("Failed to deserialize input parameters.");
 										#der
