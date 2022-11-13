@@ -348,13 +348,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			ty: Box::new(Type::Path(arg_type.clone())),
 		});
 		ret_handler_args.push_punct(Comma::default());
+		ret_handler_args.push_value(PatType {
+			attrs: Vec::new(),
+			pat: parse_quote! {msg_id},
+			colon_token: Colon::default(),
+			ty: parse_quote! {u32},
+		});
 	}
-	ret_handler_args.push_value(PatType {
-		attrs: Vec::new(),
-		pat: parse_quote! {msg_id},
-		colon_token: Colon::default(),
-		ty: parse_quote! {u32},
-	});
 
 	let msg_name_vis = msg_name.to_string();
 
@@ -378,13 +378,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	);
 	let (client_arg_ser, _) = gen_ser(
 		{
+			// Only generate msg_id if a response is expected
 			let mut client_original_args = original_args.clone();
-			client_original_args.push(PatType {
-				attrs: Vec::new(),
-				pat: parse_quote! {msg_id},
-				colon_token: Colon::default(),
-				ty: parse_quote! {u32},
-			});
+
+			if arg_type.len() > 0 {
+				client_original_args.push(PatType {
+					attrs: Vec::new(),
+					pat: parse_quote! {msg_id},
+					colon_token: Colon::default(),
+					ty: parse_quote! {u32},
+				});
+			}
 			client_original_args
 		}
 		.into_iter(),
