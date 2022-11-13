@@ -139,24 +139,26 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			});
 
 		for (i, (pat, ty)) in arg_types_iter.enumerate() {
+			// Nest the callback after all arguments are deserialized
+			let callback = if i == 0 {
+				callback.take().unwrap_or(TokenStream2::new())
+			} else {
+				TokenStream2::new()
+			};
+
 			match ty.to_string().as_str() {
 				// No work needs to be done for copy types, since they are passed in as their values
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 					der = quote! {
-						#der
-
 						let #pat = #pat as #ty;
+
+						{
+							#der
+							#callback
+						};
 					};
 				}
 				_ => {
-					// Nest the callback after all arguments are deserialized
-					let callback = if i == 0 {
-						println!("{}", callback.is_some());
-						callback.take().unwrap_or(TokenStream2::new())
-					} else {
-						TokenStream2::new()
-					};
-
 					der = quote! {
 						// Read until a } character is encoutnered (this should be JSON)
 						// or the results buffer isn't expanding
