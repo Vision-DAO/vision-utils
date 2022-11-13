@@ -364,7 +364,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			print(msg.as_ptr() as i32);
 		}
 
-		if let Some(callback) = #msg_pipeline_name.write().unwrap().get_mut(msg_id as usize).unwrap().take() {
+		let lock = #msg_pipeline_name.write().unwrap();
+
+		unsafe {
+			let msg = std::ffi::CString::new(format!("got lock {}", #msg_name_vis)).unwrap();
+			print(msg.as_ptr() as i32);
+		}
+
+		if let Some(callback) = lock.get_mut(msg_id as usize).unwrap().take() {
 			callback(arg);
 		}
 	};
