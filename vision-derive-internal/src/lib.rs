@@ -362,7 +362,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			print(msg.as_ptr() as i32);
 		}
 
-		if let Some(callback) = #msg_pipeline_name.get(msg_id).flatten().take() {
+		if let Some(callback) = #msg_pipeline_name.write().unwrap().get_mut(msg_id).flatten().take() {
 			callback(arg);
 		}
 	};
