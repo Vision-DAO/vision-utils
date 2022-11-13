@@ -283,20 +283,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						use #extern_crate_pre::serde_json::to_vec;
 						use #extern_crate_pre::serde::Serialize;
 
-						let mut v_bytes = to_vec(&#id).unwrap();
-
-						unsafe {
-							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {} with value '{:?}'", v_bytes.len(), res_buf, #id)).unwrap();
-							print(msg.as_ptr() as i32);
-						}
+						let v_bytes = to_vec(&#id).unwrap();
 
 						let #id = v.as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
 
-						let v_len = v_bytes.len();
-						v.append(&mut v_bytes);
+						let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
+						v.append(cell_addr_bytes);
 
-						#alloc_module::grow(res_buf, v_len as u32);
+						#alloc_module::grow(res_buf, v_bytes.len() as u32);
 
 						for (i, b) in v_bytes.into_iter().enumerate() {
 							// Space for offset u32, and val u8
