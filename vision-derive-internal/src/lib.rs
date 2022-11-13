@@ -169,7 +169,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								buf.lock().unwrap().push(0);
 
 								let buf = buf.clone();
-								#alloc_module::read(cell, i, |val| {
+								#alloc_module::read(cell, i, Arc::new(|val| {
 									buf.lock().unwrap()[i] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
@@ -177,7 +177,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 										#der
 										#callback
 									}
-								});
+								}));
 							}
 						});
 					};
