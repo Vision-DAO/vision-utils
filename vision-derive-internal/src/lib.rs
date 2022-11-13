@@ -444,7 +444,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: RwLock<Vec<Option<Box<dyn Fn(#ser_type)>>>> = RwLock::new(Vec::new());
+			pub static #msg_pipeline_name: RwLock<Vec<Option<Arc<dyn Fn(#ser_type) + Send + Sync>>>> = RwLock::new(Vec::new());
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
@@ -461,7 +461,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				#ret_der
 			}
 
-			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: Box<dyn Fn(#ser_type)>) {
+			pub fn #msg_name_ident(to: #extern_crate_pre::vision_utils::types::Address, #original_args, callback: Arc<dyn Fn(#ser_type) + Send + Sync>) {
 				extern "C" {
 					fn print(s: i32);
 				}
