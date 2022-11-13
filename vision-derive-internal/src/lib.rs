@@ -82,8 +82,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 		});
 
+	println!("1");
+
 	let original_args: Punctuated<PatType, Comma> =
 		Punctuated::from_iter(args_iter.clone().skip(1));
+
+	println!("2");
 
 	let arg_names: Punctuated<Expr, Comma> = args_iter
 		.clone()
