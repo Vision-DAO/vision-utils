@@ -166,12 +166,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::len(cell, std::sync::Arc::new(move |len| {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-							let mut n_done = std::sync::atomic::AtomicU32::new(0);
+							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
 							for i in 0..u32::MAX {
 								buf.lock().unwrap().push(0);
 
 								let buf = buf.clone();
+								let n_done = n_done.clone();
 								#alloc_module::read(cell, i, std::sync::Arc::new(move |val| {
 									buf.lock().unwrap()[i as usize] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
