@@ -440,7 +440,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#input
 	};
 
-	let args_ptr = arg_names.iter().nth(1).cloned().unwrap_or(parse_quote! {v});
+	let args_ptr = arg_names
+		.iter()
+		.nth(1)
+		.cloned()
+		.unwrap_or(parse_quote! {v.as_ptr() as i32});
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
