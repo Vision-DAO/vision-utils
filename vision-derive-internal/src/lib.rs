@@ -494,7 +494,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_id = {
 					let lock = #msg_pipeline_name.write().unwrap();
 					lock.push(Some(callback));
-					lock.len() - 1;
+					lock.len() - 1
 				};
 
 				#client_arg_ser
