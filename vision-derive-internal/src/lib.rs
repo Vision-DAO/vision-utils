@@ -439,6 +439,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#input
 	};
 
+	println!("{:?}", arg_names);
 	let args_ptr = arg_names[1].clone();
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
