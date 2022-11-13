@@ -288,12 +288,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						let #id = v.as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
 
+						let v_len = v_bytes.len();
 						v.append(&mut v_bytes);
 
-						#alloc_module::grow(res_buf, v_bytes.len() as u32);
+						#alloc_module::grow(res_buf, v_len as u32);
 
 						unsafe {
-							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {}", v_bytes.len(), res_buf)).unwrap();
+							let msg = std::ffi::CString::new(format!("writing {} bytes to cell {} with value '{:?}'", v_bytes.len(), res_buf, #id)).unwrap();
 							print(msg.as_ptr() as i32);
 						}
 
