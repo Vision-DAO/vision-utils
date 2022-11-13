@@ -166,7 +166,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						let cell = #pat;
 
 						#alloc_module::len(cell, |len| {
-							let mut buf = std::sync::Arc::new(Mutex::new(Vec::new()));
+							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let mut n_done = std::sync::atomic::AtomicU32::new(0);
 
 							for i in 0..u32::MAX {
