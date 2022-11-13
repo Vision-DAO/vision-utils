@@ -513,7 +513,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					print(msg.as_ptr() as i32);
 				}
 
-				#msg_pipeline_name.write().unwrap().push(None);
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
 							 #args_ptr);
