@@ -237,6 +237,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		let mut gen_buf = quote! {
 			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
+			let v_ptr = v.as_ptr() as i32;
+			drop(&v_ptr);
 		};
 
 		for (id, ser_type) in args_iter {
@@ -444,7 +446,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.iter()
 		.nth(1)
 		.cloned()
-		.unwrap_or(parse_quote! {v.as_ptr() as i32});
+		.unwrap_or(parse_quote! {v_ptr});
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
