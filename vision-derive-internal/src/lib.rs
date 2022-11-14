@@ -264,7 +264,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut bytes = Vec::from((#id as #min_equivalent).to_le_bytes());
 
 							unsafe {
-								let msg = std::ffi::CString::new(format!("serialized primitive argument {}: {:?}", #id, bytes)).unwrap();
+								let msg = std::ffi::CString::new(format!("serialized primitive argument {}: {:?} (@{})", #id, bytes, v.as_ptr() as i32 + v.len() as i32)).unwrap();
 								print(msg.as_ptr() as i32);
 							}
 
@@ -521,7 +521,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
-				let msg_id = {
+				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
 					lock.push(Some(callback));
 					let id = lock.len() as u32 - 1;
@@ -562,7 +562,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let msg = std::ffi::CString::new(format!("serializing arguments for {}", #msg_name_vis)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
-				let msg_id = 0;
+				let msg_id: u32 = 0;
 
 				#client_arg_ser
 
