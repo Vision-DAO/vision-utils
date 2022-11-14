@@ -168,7 +168,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-							for i in 0..u32::MAX {
+							for i in 0..len {
 								buf.lock().unwrap().push(0);
 
 								let buf = buf.clone();
