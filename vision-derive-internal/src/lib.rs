@@ -505,7 +505,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_id = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
 					lock.push(Some(callback));
-					lock.len() - 1
+					let id = lock.len() - 1;
+
+					unsafe {
+						let msg = std::ffi::CString::new(&format!("registered callback (#{}) in pipeline {}", id, #msg_name_vis)).unwrap();
+						print(msg.as_ptr() as i32);
+					}
+
+					id
 				};
 
 				#client_arg_ser
