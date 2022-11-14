@@ -174,6 +174,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								let buf = buf.clone();
 								let n_done = n_done.clone();
 								#alloc_module::read(cell, i, std::sync::Arc::new(move |val| {
+									unsafe {
+										let msg = std::ffi::CString::new(format!("read {}: {:?}", i, val.clone())).unwrap();
+										print(msg.as_ptr() as i32);
+									}
+
 									buf.lock().unwrap()[i as usize] = val;
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len {
 										// This should not happen, since the wrapper method being used conforms to this practice
