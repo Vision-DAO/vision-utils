@@ -253,9 +253,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// If the return value is a copy type, use its native representation
 				match ser_type_ident.to_string().as_str() {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+						let min_equivalent = match ser_type_ident.to_string().as_str() {
+							"u8" | "Address" | "u16" | "u32" => quote!{u32},
+							"i8" | "i16" | "i32" => quote!{i32},
+							"i64" => quote!{i64},
+							"u64" => quote!{u64},
+							_ => quote!{u32},
+						};
+
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let mut bytes = Vec::from(#id.to_le_bytes());
+							let mut bytes = Vec::from((#id as #min_equivalent).to_le_bytes());
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
