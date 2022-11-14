@@ -264,11 +264,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						Some(quote! {
 							let mut bytes = Vec::from((#id as #min_equivalent).to_le_bytes());
 
-							unsafe {
-								let msg = std::ffi::CString::new(format!("serialized primitive argument {}: {:?} (@{})", #id, bytes, v.as_ptr() as i32 + v.len() as i32)).unwrap();
-								print(msg.as_ptr() as i32);
-							}
-
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
@@ -287,11 +282,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					quote! {
 						// Allocate a memory cell for the value
 						let res_buf = #extern_crate_pre::vision_utils::actor::spawn_actor(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR);
-
-						unsafe {
-							let msg = std::ffi::CString::new(format!("allocated cell {}", res_buf)).unwrap();
-							print(msg.as_ptr() as i32);
-						}
 
 						use #extern_crate_pre::serde_json::to_vec;
 						use #extern_crate_pre::serde::Serialize;
@@ -372,17 +362,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let msg_name_vis = msg_name.to_string();
 
 	let client_return_deserialize_callback = quote! {
-		unsafe {
-			let msg = std::ffi::CString::new(format!("writing to pipeline {}", #msg_name_vis)).unwrap();
-			print(msg.as_ptr() as i32);
-		}
-
 		let mut lock = #msg_pipeline_name.write().unwrap();
-
-		unsafe {
-			let msg = std::ffi::CString::new(format!("got lock {}, reading callback {} (len: {})", #msg_name_vis, msg_id, lock.len())).unwrap();
-			print(msg.as_ptr() as i32);
-		}
 
 		if let Some(callback) = lock.get_mut(msg_id as usize).unwrap().take() {
 			callback(arg);
@@ -418,15 +398,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		Some(_) => quote! {
 			#ser
 
-			extern "C" {
-				fn print(s: i32);
-			}
-
 			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			unsafe {
-				let msg = std::ffi::CString::new(format!("responding to {} from {} (me)", from, #extern_crate_pre::vision_utils::actor::address())).unwrap();
-				print(msg.as_ptr() as i32);
-			}
 			send_message(from, handler_name.as_ptr() as i32, arg);
 		},
 		None => quote! {},
@@ -453,15 +425,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#extern_attrs
 		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
-
-			extern "C" {
-				fn print(s: i32);
-			}
-
-			unsafe {
-				let msg = std::ffi::CString::new(format!("server-side {} {}", #msg_name_vis, msg_id)).unwrap();
-				print(msg.as_ptr() as i32);
-			}
 
 			#der
 		}
@@ -503,23 +466,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
 			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type, msg_id: u32) {
-
-				extern "C" {
-					fn print(s: i32);
-				}
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("{} {}", #msg_name_vis, msg_id)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
 				#ret_der
 			}
 
 			pub fn #msg_name_ident(#proper_args, callback: std::sync::Arc<dyn Fn(#ser_type) + Send + Sync>) {
-				extern "C" {
-					fn print(s: i32);
-				}
-
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
 				let msg_id: u32 = {
@@ -527,22 +477,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					lock.push(Some(callback));
 					let id = lock.len() as u32 - 1;
 
-					unsafe {
-						let msg = std::ffi::CString::new(format!("registered callback (#{}) in pipeline {}", id, #msg_name_vis)).unwrap();
-						print(msg.as_ptr() as i32);
-					}
-
 					id
 				};
 
 				#client_arg_ser
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("{}", #args_ptr)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
 
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
@@ -554,31 +494,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			#gen
 
 			pub fn #msg_name_ident(#proper_args) {
-				extern "C" {
-					fn print(s: i32);
-				}
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
-				unsafe {
-					let msg = std::ffi::CString::new(format!("serializing arguments for {}", #msg_name_vis)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
 				let msg_id: u32 = 0;
 
 				#client_arg_ser
 
-				unsafe {
-					let msg = std::ffi::CString::new(format!("serialized arguments for {}", #msg_name_vis)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
-
 				let msg_kind = std::ffi::CString::new(#msg_name_vis)
 					.expect("Invalid scheduler message kind encoding");
-
-				unsafe {
-					let msg = std::ffi::CString::new(format!("{}", #args_ptr)).unwrap();
-					print(msg.as_ptr() as i32);
-				}
 
 				send_message(to,
 							 msg_kind.as_ptr() as i32,
