@@ -520,7 +520,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.expect("Invalid scheduler message kind encoding");
 
 				unsafe {
-					let msg = std::ffi::CString::new("405").unwrap();
+					let msg = std::ffi::CString::new(format!("{}", #args_ptr)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
 
@@ -555,7 +555,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.expect("Invalid scheduler message kind encoding");
 
 				unsafe {
-					let msg = std::ffi::CString::new("432").unwrap();
+					let msg = std::ffi::CString::new(format!("{}", #args_ptr)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
 
