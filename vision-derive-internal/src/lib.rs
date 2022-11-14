@@ -400,14 +400,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			// Only generate msg_id if a response is expected
 			let mut client_original_args = original_args.clone();
 
-			if arg_type.len() > 0 {
-				client_original_args.push(PatType {
-					attrs: Vec::new(),
-					pat: parse_quote! {msg_id},
-					colon_token: Colon::default(),
-					ty: parse_quote! {u32},
-				});
-			}
+			client_original_args.push(PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {msg_id},
+				colon_token: Colon::default(),
+				ty: parse_quote! {u32},
+			});
 			client_original_args
 		}
 		.into_iter(),
@@ -564,6 +562,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let msg = std::ffi::CString::new(format!("serializing arguments for {}", #msg_name_vis)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
+				let msg_id = 0;
 
 				#client_arg_ser
 
