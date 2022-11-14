@@ -176,14 +176,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								#alloc_module::read(cell, i, std::sync::Arc::new(move |val| {
 									buf.lock().unwrap()[i as usize] = val;
 
-									let progress = n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-									unsafe {
-										let msg = std::ffi::CString::new(format!("HELLO MY BRUDDA {}/{}", progress, len)).unwrap();
-										print(msg.as_ptr() as i32);
-									}
-
-									if progress == len {
+									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
 										// This should not happen, since the wrapper method being used conforms to this practice
 										let #pat = #extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters.");
 										#der
