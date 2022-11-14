@@ -443,6 +443,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
+			extern "C" {
+				fn print(s: i32);
+			}
+
+			unsafe {
+				let msg = std::ffi::CString::new(format!("server-side {} {}", #msg_name_vis, msg_id)).unwrap();
+				print(msg.as_ptr() as i32);
+			}
+
 			#der
 		}
 
@@ -489,7 +498,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}
 
 				unsafe {
-					let msg = std::ffi::CString::new(#msg_name_vis).unwrap();
+					let msg = std::ffi::CString::new(format!("{} {}", #msg_name_vis, msg_id)).unwrap();
 					print(msg.as_ptr() as i32);
 				}
 				#ret_der
