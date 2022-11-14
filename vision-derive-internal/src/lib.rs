@@ -179,7 +179,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 									let progress = n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
 									unsafe {
-										let msg = std::ffi::CString::new(format!("HELLO MY BRUDDA {}", progress)).unwrap();
+										let msg = std::ffi::CString::new(format!("HELLO MY BRUDDA {}/{}", progress, len)).unwrap();
 										print(msg.as_ptr() as i32);
 									}
 
