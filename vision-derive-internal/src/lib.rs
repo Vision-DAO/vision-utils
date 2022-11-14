@@ -262,6 +262,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						type_buf.push(Some(ser_type));
 						Some(quote! {
 							let mut bytes = Vec::from((#id as #min_equivalent).to_le_bytes());
+
+							unsafe {
+								let msg = std::ffi::CString::new(format!("serialized primitive argument {}: {:?}", #id, bytes)).unwrap();
+								print(msg.as_ptr() as i32);
+							}
+
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
