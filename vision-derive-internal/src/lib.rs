@@ -367,7 +367,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
 		unsafe {
-			let msg = std::ffi::CString::new(format!("got lock {}", #msg_name_vis)).unwrap();
+			let msg = std::ffi::CString::new(format!("got lock {}, reading callback {} (len: {})", #msg_name_vis, msg_id, lock.len())).unwrap();
 			print(msg.as_ptr() as i32);
 		}
 
