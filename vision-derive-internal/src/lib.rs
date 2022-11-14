@@ -228,8 +228,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				.to_string()
 				.as_str()
 			{
-				"i8" | "u8" => 1,
-				"i16" | "u16" => 2,
 				"i64" | "u64" => 8,
 				_ => 4, // Address (and anything serialied to an address), i32, u32
 			}
