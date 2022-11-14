@@ -508,7 +508,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					let id = lock.len() - 1;
 
 					unsafe {
-						let msg = std::ffi::CString::new(&format!("registered callback (#{}) in pipeline {}", id, #msg_name_vis)).unwrap();
+						let msg = std::ffi::CString::new(format!("registered callback (#{}) in pipeline {}", id, #msg_name_vis)).unwrap();
 						print(msg.as_ptr() as i32);
 					}
 
