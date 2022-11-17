@@ -4,8 +4,8 @@ use quote::{quote, ToTokens};
 use std::iter;
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
-	AttributeArgs, Expr, ExprPath, FnArg, Ident, ItemFn, Pat, PatIdent, PatType, Path,
-	PathArguments, PathSegment, ReturnType, Type, TypePath,
+	AttributeArgs, Expr, ExprPath, FnArg, GenericArgument, Ident, ItemFn, Pat, PatIdent, PatType,
+	Path, PathArguments, PathSegment, Type, TypePath,
 };
 
 /// For a message handler, generates:
@@ -68,16 +68,24 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	input.sig.ident = inner_ident.clone();
 
 	// Save argument names for proxying call to inner handlers
-	let mut args = input.sig.inputs.clone();
-	let args_iter = input
-		.sig
-		.inputs
-		.clone()
-		.into_iter()
-		.filter_map(|arg| match arg {
-			FnArg::Typed(arg) => Some(arg),
-			FnArg::Receiver(_) => panic!("Cannot use self in handler."),
-		});
+	// Skip serializing the callback parametera
+	let mut args = {
+		let mut with_cb = input.sig.inputs.clone();
+		with_cb.pop();
+
+		with_cb
+	};
+	let args_iter = {
+		let mut with_cb = input.sig.inputs.clone();
+		with_cb.pop();
+
+		with_cb
+	}
+	.into_iter()
+	.filter_map(|arg| match arg {
+		FnArg::Typed(arg) => Some(arg),
+		FnArg::Receiver(_) => panic!("Cannot use self in handler."),
+	});
 
 	let original_args: Punctuated<PatType, Comma> =
 		Punctuated::from_iter(args_iter.clone().skip(1));
@@ -313,17 +321,40 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let mut ser_type = None;
-	let (ser, arg_type) = match input.sig.output.clone() {
-		ReturnType::Default => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
-		ReturnType::Type(_, ty) => {
-			ser_type = Some(*ty.clone());
+	let (ser, arg_type) = match input
+		.sig
+		.inputs
+		.last()
+		.and_then(|cb| match cb {
+			FnArg::Typed(ty) => Some(ty),
+			_ => None,
+		})
+		.and_then(|cb_type| match &*cb_type.ty {
+			Type::Path(pat) => pat.path.segments.last(),
+			_ => None,
+		})
+		.and_then(|cb_ident| match cb_ident.ident.to_string().as_str() {
+			"Callback" => Some(cb_ident),
+			_ => panic!("callback must be a Callback<T>"),
+		})
+		.and_then(|cb_ident| match &cb_ident.arguments {
+			PathArguments::AngleBracketed(cb_type) => cb_type.args.last(),
+			_ => None,
+		})
+		.and_then(|cb_param_type| match cb_param_type {
+			GenericArgument::Type(ty) => Some(ty),
+			_ => None,
+		}) {
+		None => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
+		Some(ty) => {
+			ser_type = Some(ty.clone());
 			gen_ser(
 				vec![
 					PatType {
 						attrs: Vec::new(),
 						pat: parse_quote! {arg},
 						colon_token: Colon::default(),
-						ty: ty.clone(),
+						ty: Box::new(ty.clone()),
 					},
 					// Identify returns as a response to a particular message call
 					PatType {
@@ -396,10 +427,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
-			#ser
+			let cb = |arg: #ser_type| {
+				#ser
 
-			let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-			send_message(from, handler_name.as_ptr() as i32, arg);
+				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+				send_message(from, handler_name.as_ptr() as i32, arg);
+			}
 		},
 		None => quote! {},
 	};
@@ -408,9 +441,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// and generate bindings that streamline sending the message, and getting a
 	// response
 	let deserialize_server_args_callback = quote! {
-		let arg = #inner_ident(#arg_names);
-
 		#further_processing
+
+		#inner_ident(#arg_names, cb);
 	};
 	let der = gen_der(
 		args_iter,
