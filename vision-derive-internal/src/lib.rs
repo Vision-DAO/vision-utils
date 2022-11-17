@@ -1,7 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
-use std::iter;
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, GenericArgument, Ident, ItemFn, Pat, PatIdent, PatType,
@@ -320,8 +319,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		(gen_buf, type_buf)
 	}
 
-	let mut ser_type = None;
-	let (ser, arg_type) = match input
+	let ty = input
 		.sig
 		.inputs
 		.last()
@@ -344,32 +342,29 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.and_then(|cb_param_type| match cb_param_type {
 			GenericArgument::Type(ty) => Some(ty),
 			_ => None,
-		}) {
-		None => gen_ser(iter::empty(), &alloc_module, &extern_crate_pre),
-		Some(ty) => {
-			ser_type = Some(ty.clone());
-			gen_ser(
-				vec![
-					PatType {
-						attrs: Vec::new(),
-						pat: parse_quote! {arg},
-						colon_token: Colon::default(),
-						ty: Box::new(ty.clone()),
-					},
-					// Identify returns as a response to a particular message call
-					PatType {
-						attrs: Vec::new(),
-						pat: parse_quote! {msg_id},
-						colon_token: Colon::default(),
-						ty: parse_quote! {u32},
-					},
-				]
-				.into_iter(),
-				&alloc_module,
-				&extern_crate_pre,
-			)
-		}
-	};
+		})
+		.expect("callback must be handled via a final `cb` argument");
+	let ser_type = Some(ty.clone());
+	let (ser, arg_type) = gen_ser(
+		vec![
+			PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {arg},
+				colon_token: Colon::default(),
+				ty: Box::new(ty.clone()),
+			},
+			// Identify returns as a response to a particular message call
+			PatType {
+				attrs: Vec::new(),
+				pat: parse_quote! {msg_id},
+				colon_token: Colon::default(),
+				ty: parse_quote! {u32},
+			},
+		]
+		.into_iter(),
+		&alloc_module,
+		&extern_crate_pre,
+	);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
 	let mut ret_type: Option<TypePath> = None;
