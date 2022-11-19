@@ -72,6 +72,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut with_cb = input.sig.inputs.clone();
 		with_cb.pop();
 
+		if let Some(last_arg) = with_cb.pop() {
+			with_cb.push_value(last_arg.into_value());
+		}
+
 		with_cb
 	};
 	let args_iter = args.clone().into_iter().filter_map(|arg| match arg {
