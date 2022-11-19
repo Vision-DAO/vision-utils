@@ -444,8 +444,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		Some(deserialize_server_args_callback),
 	);
 
-	println!("ARGS ACTUAL {:?}", args);
-
 	let mut gen = quote! {
 		#[cfg(feature = "module")]
 		#extern_attrs
