@@ -439,10 +439,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		Some(deserialize_server_args_callback),
 	);
 
+	println!("ARGS ACTUAL {:?}", args);
+
 	let mut gen = quote! {
 		#[cfg(feature = "module")]
 		#extern_attrs
-		pub extern "C" fn #msg_ident(#args, test: icles, msg_id: u32) {
+		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
