@@ -72,6 +72,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut with_cb = input.sig.inputs.clone();
 		with_cb.pop();
 
+		// Ensure that previous arguments are not suffixed by a comma
 		if let Some(last_arg) = with_cb.pop() {
 			with_cb.push_value(last_arg.into_value());
 		}
