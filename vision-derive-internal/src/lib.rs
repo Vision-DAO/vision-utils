@@ -190,8 +190,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
 					if let Some(ref mut args) = args {
 						if let FnArg::Typed(ref mut typed_arg) = args[i] {
-							println!("MUTATING ARGS");
-
 							typed_arg.ty = parse_quote! {
 								#extern_crate_pre::vision_utils::types::Address
 							};
@@ -444,7 +442,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut gen = quote! {
 		#[cfg(feature = "module")]
 		#extern_attrs
-		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
+		pub extern "C" fn #msg_ident(#args, test: icles, msg_id: u32) {
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
