@@ -190,6 +190,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
 					if let Some(ref mut args) = args {
 						if let FnArg::Typed(ref mut typed_arg) = args[i] {
+							println!("MUTATING ARGS");
+
 							typed_arg.ty = parse_quote! {
 								#extern_crate_pre::vision_utils::types::Address
 							};
