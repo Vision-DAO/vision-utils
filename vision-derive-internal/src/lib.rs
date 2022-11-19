@@ -68,26 +68,16 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	// Save argument names for proxying call to inner handlers
 	// Skip serializing the callback parametera
-	println!("{:?}", input.sig.inputs);
 	let mut args = {
 		let mut with_cb = input.sig.inputs.clone();
 		with_cb.pop();
 
 		with_cb
 	};
-	let args_iter = {
-		let mut with_cb = input.sig.inputs.clone();
-		with_cb.pop();
-
-		with_cb
-	}
-	.into_iter()
-	.filter_map(|arg| match arg {
+	let args_iter = args.clone().into_iter().filter_map(|arg| match arg {
 		FnArg::Typed(arg) => Some(arg),
 		FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 	});
-
-	println!("{:?}", args);
 
 	let original_args: Punctuated<PatType, Comma> =
 		Punctuated::from_iter(args_iter.clone().skip(1));
