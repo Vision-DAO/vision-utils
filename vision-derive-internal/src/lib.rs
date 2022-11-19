@@ -68,6 +68,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	// Save argument names for proxying call to inner handlers
 	// Skip serializing the callback parametera
+	println!("{:?}", input.sig.inputs);
 	let mut args = {
 		let mut with_cb = input.sig.inputs.clone();
 		with_cb.pop();
@@ -85,6 +86,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		FnArg::Typed(arg) => Some(arg),
 		FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 	});
+
+	println!("{:?}", args);
 
 	let original_args: Punctuated<PatType, Comma> =
 		Punctuated::from_iter(args_iter.clone().skip(1));
@@ -437,8 +440,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// response
 	let deserialize_server_args_callback = quote! {
 		#further_processing
-
-		#inner_ident(#arg_names, cb);
 	};
 	let der = gen_der(
 		args_iter,
