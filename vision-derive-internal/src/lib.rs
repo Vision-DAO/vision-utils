@@ -435,7 +435,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// response
 	let deserialize_server_args_callback = quote! {
 		#further_processing
-		#inner_ident(#arg_names, #extern_crate_pre::vision_utils::types::callback!(cb));
+		#inner_ident(#arg_names, #extern_crate_pre::vision_utils::types::Callback::new(cb));
 	};
 	let der = gen_der(
 		args_iter,
