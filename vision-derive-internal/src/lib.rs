@@ -151,8 +151,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				TokenStream2::new()
 			};
 
-			println!("{:?}", callback);
-
 			match ty.to_string().as_str() {
 				// No work needs to be done for copy types, since they are passed in as their values
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
@@ -536,6 +534,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 	}
+
+	println!("{}", gen);
 
 	TokenStream::from(gen)
 }
