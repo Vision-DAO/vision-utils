@@ -145,6 +145,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		for (i, (pat, ty)) in arg_types_iter.enumerate() {
 			// Nest the callback after all arguments are deserialized
+			println!("{} {} {}", i, i == 0, callback.is_some());
 			let callback = if i == 0 {
 				callback.take().unwrap_or(TokenStream2::new())
 			} else {
