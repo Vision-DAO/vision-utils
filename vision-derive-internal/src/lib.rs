@@ -435,6 +435,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// response
 	let deserialize_server_args_callback = quote! {
 		#further_processing
+		#inner_ident(#arg_names, cb);
 	};
 	let der = gen_der(
 		args_iter,
