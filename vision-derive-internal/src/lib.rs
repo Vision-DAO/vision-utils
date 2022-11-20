@@ -420,7 +420,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
-			let cb = |arg: #ser_type| {
+			let cb = move |arg: #ser_type| {
 				#ser
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
