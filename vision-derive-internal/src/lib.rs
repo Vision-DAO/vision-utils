@@ -299,7 +299,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						v.append(&mut cell_addr_bytes);
 
 						#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(|_| {
-							for (i, b) in v_bytes.into_iter().enumerate() {
+							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
 								#alloc_module::write(res_buf, i as u32, b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
 							}
