@@ -425,7 +425,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
 				send_message(from, handler_name.as_ptr() as i32, arg);
-			}.into();
+			};
 		},
 		None => quote! {},
 	};
@@ -435,7 +435,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// response
 	let deserialize_server_args_callback = quote! {
 		#further_processing
-		#inner_ident(#arg_names, cb);
+		#inner_ident(#arg_names, cb.into());
 	};
 	let der = gen_der(
 		args_iter,
