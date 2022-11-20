@@ -21,12 +21,6 @@ impl<T> Callback<T> {
 	}
 }
 
-impl<T> From<&'static (dyn FnOnce(T) + Send + Sync)> for Callback<T> {
-	fn from(cb: &'static (dyn FnOnce(T) + Send + Sync)) -> Callback<T> {
-		Callback(Arc::new(Box::new(cb)))
-	}
-}
-
 impl<T> AsRef<dyn FnOnce(T) + Send + Sync> for Callback<T> {
 	fn as_ref(&self) -> &(dyn FnOnce(T) + Send + Sync + 'static) {
 		(*self.0).as_ref()
