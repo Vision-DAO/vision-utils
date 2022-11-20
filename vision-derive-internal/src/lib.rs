@@ -288,10 +288,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// Allocate a memory cell for the value
 						let res_buf = #extern_crate_pre::vision_utils::actor::spawn_actor(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR);
 
-						use #extern_crate_pre::serde_json::to_vec;
-						use #extern_crate_pre::serde::Serialize;
-
-						let v_bytes = to_vec(&#id).unwrap();
+						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
 						let #id = v.as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
@@ -310,6 +307,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			};
 
 			gen_buf = quote! {
+				use #extern_crate_pre::serde::Serialize;
+
 				#gen_buf
 				#ser
 			};
