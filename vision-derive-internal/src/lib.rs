@@ -301,7 +301,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(|_| {
 							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
-								#alloc_module::write(res_buf, i as u32, b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
+								#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
 							}
 						}));
 					}
