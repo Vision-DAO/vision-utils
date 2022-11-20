@@ -240,6 +240,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		});
 
 		let mut gen_buf = quote! {
+			use #extern_crate_pre::serde::Serialize;
+
 			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
 			let v_ptr = v.as_ptr() as i32;
 			drop(&v_ptr);
@@ -307,8 +309,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			};
 
 			gen_buf = quote! {
-				use #extern_crate_pre::serde::Serialize;
-
 				#gen_buf
 				#ser
 			};
