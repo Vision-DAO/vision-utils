@@ -169,7 +169,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// or the results buffer isn't expanding
 						let cell = #pat;
 
-						#alloc_module::len(cell, move |len| {
+						#alloc_module::len(cell, Callback::new(move |len| {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
@@ -178,7 +178,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 								let buf = buf.clone();
 								let n_done = n_done.clone();
-								#alloc_module::read(cell, i, move |val| {
+								#alloc_module::read(cell, i, Callback::new(move |val| {
 									buf.lock().unwrap()[i as usize] = val;
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
@@ -187,9 +187,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 										#der
 										#callback
 									}
-								}.into());
+								}));
 							}
-						}.into());
+						}));
 					};
 
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
@@ -299,12 +299,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
 						v.append(&mut cell_addr_bytes);
 
-						#alloc_module::grow(res_buf, v_bytes.len() as u32, |_| {
+						#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(|_| {
 							for (i, b) in v_bytes.into_iter().enumerate() {
 								// Space for offset u32, and val u8
-								#alloc_module::write(res_buf, i as u32, b, |_| {}.into());
+								#alloc_module::write(res_buf, i as u32, b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
 							}
-						}.into());
+						}));
 					}
 				})
 			};
