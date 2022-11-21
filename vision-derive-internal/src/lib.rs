@@ -119,6 +119,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	) -> TokenStream2 {
 		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
+		let mut clone_all = TokenStream2::new();
 		let arg_types_iter = args_iter
 			.map(|arg| {
 				(
@@ -163,6 +164,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							#callback
 						};
 					};
+
+					clone_all = quote! {
+						#clone_all
+						let #pat = #pat.clone();
+					};
 				}
 				_ => {
 					der = quote! {
@@ -170,6 +176,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// or the results buffer isn't expanding
 						let cell = #pat;
 
+						#clone_all
 						#alloc_module::len(cell, Callback::new(move |len| {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
@@ -179,6 +186,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 								let buf = buf.clone();
 								let n_done = n_done.clone();
+								#clone_all
 								#alloc_module::read(cell, i, Callback::new(move |val| {
 									buf.lock().unwrap()[i as usize] = val;
 
@@ -192,6 +200,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								}));
 							}
 						}));
+					};
+
+					clone_all = quote! {
+						#clone_all
+						let #pat = #pat.clone();
 					};
 
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
