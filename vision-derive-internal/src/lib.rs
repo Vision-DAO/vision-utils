@@ -437,7 +437,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.clone()
 		.into_iter()
 		.map(|arg: Expr| -> Expr {
-			parse_quote! {#arg.take().unwrap()}
+			parse_quote! {(&mut #arg).take().unwrap()}
 		})
 		.collect();
 	let deserialize_server_args_callback = quote! {
