@@ -388,7 +388,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
 		if let Some(callback) = lock.get_mut(msg_id as usize).unwrap().take() {
-			callback(arg);
+			callback.call(arg);
 		}
 	};
 
