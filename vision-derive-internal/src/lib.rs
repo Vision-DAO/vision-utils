@@ -183,7 +183,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
 										// This should not happen, since the wrapper method being used conforms to this practice
-										let #pat = #extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters.");
+										let #pat = Some(#extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters."));
 										#der
 										#callback
 									}
@@ -388,7 +388,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
 		if let Some(callback) = lock.get_mut(msg_id as usize).unwrap().take() {
-			callback.call(arg);
+			callback.call(arg.take().unwrap());
 		}
 	};
 
@@ -432,9 +432,16 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
+	let consumed_arg_names: Punctuated<Expr, Comma> = arg_names
+		.clone()
+		.into_iter()
+		.map(|arg: Expr| -> Expr {
+			parse_quote! {#arg.take().unwrap()}
+		})
+		.collect();
 	let deserialize_server_args_callback = quote! {
 		#further_processing
-		#inner_ident(#arg_names, #extern_crate_pre::vision_utils::types::Callback::new(cb));
+		#inner_ident(#consumed_arg_names, #extern_crate_pre::vision_utils::types::Callback::new(cb));
 	};
 	let der = gen_der(
 		args_iter,
