@@ -119,8 +119,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	) -> TokenStream2 {
 		// Use #extern_crate_pre::serde_json to deserialize the parameters of the function
 		let mut der = TokenStream2::new();
-		let mut clone_all = TokenStream2::new();
-		let arg_types_iter = args_iter
+		let arg_types: Vec<(usize, (Ident, Ident))> = args_iter
 			.map(|arg| {
 				(
 					match *arg.pat {
@@ -142,9 +141,31 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.ident
 					.clone(),
 				)
-			});
+			})
+			.enumerate()
+			.collect();
+		let mut clone_all =
+			arg_types
+				.iter()
+				.enumerate()
+				.fold(Vec::new(), |mut accum, (i, (pat, _))| {
+					let prev = accum
+						.get(i - 1)
+						.cloned()
+						.unwrap_or_else(|| TokenStream2::new());
 
-		for (i, (pat, ty)) in arg_types_iter.enumerate() {
+					accum.push(quote! {
+						#prev
+						let #pat = #pat.clone();
+					});
+
+					accum
+				});
+		clone_all.reverse();
+
+		for (i, (pat, ty)) in arg_types.into_iter() {
+			let clone_all = &clone_all[i];
+
 			// Nest the callback after all arguments are deserialized
 			let callback = if i == 0 {
 				callback.take().unwrap_or(TokenStream2::new())
@@ -163,11 +184,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							#der
 							#callback
 						};
-					};
-
-					clone_all = quote! {
-						#clone_all
-						let #pat = #pat.clone();
 					};
 				}
 				_ => {
@@ -200,11 +216,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								}));
 							}
 						}));
-					};
-
-					clone_all = quote! {
-						#clone_all
-						let #pat = #pat.clone();
 					};
 
 					// Since a heap-allocated proxy was used to read the argument, accept it as an Address
