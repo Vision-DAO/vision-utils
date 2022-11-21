@@ -144,23 +144,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			})
 			.enumerate()
 			.collect();
-		let mut clone_all = arg_types.iter().enumerate().fold(
-			Vec::new(),
-			|mut accum: Vec<TokenStream2>, (i, (pat, _))| {
-				let prev = if i == 0 {
-					TokenStream2::new()
-				} else {
-					accum[i - 1].clone()
-				};
+		let mut clone_all =
+			arg_types
+				.iter()
+				.fold(Vec::new(), |mut accum: Vec<TokenStream2>, (i, (pat, _))| {
+					let prev = if i == &0usize {
+						TokenStream2::new()
+					} else {
+						accum[i - 1].clone()
+					};
 
-				accum.push(quote! {
-					#prev
-					let #pat = #pat.clone();
+					accum.push(quote! {
+						#prev
+						let #pat = #pat.clone();
+					});
+
+					accum
 				});
-
-				accum
-			},
-		);
 		clone_all.reverse();
 
 		for (i, (pat, ty)) in arg_types.into_iter() {
