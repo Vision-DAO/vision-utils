@@ -542,5 +542,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		}
 	}
 
+	println!("{}", gen.to_string());
+
 	TokenStream::from(gen)
 }
