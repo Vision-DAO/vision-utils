@@ -156,8 +156,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 					der = quote! {
 						let #pat = #pat as #ty;
-						let mut #pat = Some(#pat);
-						let mut #pat = &mut #pat;
+						let mut some_#pat = Some(#pat);
+						let mut #pat = &mut some_#pat;
 
 						{
 							#der
