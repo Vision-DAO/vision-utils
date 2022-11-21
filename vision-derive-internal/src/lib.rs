@@ -155,7 +155,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// No work needs to be done for copy types, since they are passed in as their values
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 					der = quote! {
-						let #pat = #pat as #ty;
+						let #pat = Some(#pat as #ty);
 
 						{
 							#der
