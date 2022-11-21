@@ -156,8 +156,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
 					der = quote! {
 						let #pat = #pat as #ty;
-						let mut some_#pat = Some(#pat);
-						let mut #pat = &mut some_#pat;
+						let #pat = std::sync::Arc::new(std::sync::Mutex::new(Some(#pat)));
 
 						{
 							#der
@@ -185,8 +184,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
 										// This should not happen, since the wrapper method being used conforms to this practice
-										let mut #pat = Some(#extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters."));
-										let mut #pat = &mut #pat;
+										let #pat = std::sync::Arc::new(std::sync::Mutex::new(Some(#extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters."))));
 
 										#der
 										#callback
@@ -391,8 +389,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
-		if let Some(callback) = lock.get_mut(msg_id.take().unwrap() as usize).unwrap().take() {
-			callback.call(arg.take().unwrap());
+		if let Some(callback) = lock.get_mut(msg_id.lock().unwrap().take().unwrap() as usize).unwrap().take() {
+			callback.call(arg.lock().unwrap().take().unwrap());
 		}
 	};
 
@@ -423,11 +421,13 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
+			let from = from.clone();
+
 			let cb = move |arg: #ser_type| {
 				#ser
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-				send_message(from.take().unwrap(), handler_name.as_ptr() as i32, arg);
+				send_message(from.lock().unwrap().take().unwrap(), handler_name.as_ptr() as i32, arg);
 			};
 		},
 		None => quote! {},
@@ -440,7 +440,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.clone()
 		.into_iter()
 		.map(|arg: Expr| -> Expr {
-			parse_quote! {#arg.take().unwrap()}
+			parse_quote! {#arg.lock().unwrap().take().unwrap()}
 		})
 		.collect();
 	let deserialize_server_args_callback = quote! {
