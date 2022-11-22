@@ -454,14 +454,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
 		Some(_) => quote! {
-			let from = from.clone();
+			let cb = {
+				let from = from.clone();
 
-			let cb = move |arg: #ser_type| {
+				move |arg: #ser_type| {
 				#ser
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
 				send_message((*from.lock().unwrap()).unwrap(), handler_name.as_ptr() as i32, arg);
-			};
+			}};
 		},
 		None => quote! {},
 	};
