@@ -437,7 +437,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	};
 
 	let ret_der = gen_der(
-		ret_handler_args.into_iter(),
+		{
+			let mut safe_args = ret_handler_args.clone();
+			if let Some(mut arg) = safe_args.first_mut() {
+				arg.ty = Box::new(ser_type.clone().unwrap());
+			}
+
+			safe_args.into_iter()
+		},
 		None,
 		&alloc_module,
 		&extern_crate_pre,
