@@ -172,6 +172,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.take()
 					.map(|cb| {
 						quote! {
+							let #pat = #pat.clone();
 							#clone_all
 
 							#cb
@@ -579,8 +580,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 	}
-
-	println!("{}", gen);
 
 	TokenStream::from(gen)
 }
