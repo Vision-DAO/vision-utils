@@ -490,6 +490,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#further_processing
 		#inner_ident(#consumed_arg_names, #extern_crate_pre::vision_utils::types::Callback::new(cb));
 	};
+
+	// TODO: Ensure that this generates deserializers for arg when it is not a
+	// copy type in client-side code
 	let der = gen_der(
 		args_iter,
 		Some(&mut args),
