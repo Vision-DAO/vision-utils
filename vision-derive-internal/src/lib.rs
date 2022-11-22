@@ -172,8 +172,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.take()
 					.map(|cb| {
 						quote! {
-							#cb
 							#clone_all
+
+							#cb
 						}
 					})
 					.unwrap_or(TokenStream2::new())
