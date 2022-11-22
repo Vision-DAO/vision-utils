@@ -146,7 +146,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			.collect();
 		let clone_items = arg_types
 			.iter()
-			.map(|(i, (pat, _))| quote! {let #pat = #pat.clone();})
+			.map(|(_i, (pat, _))| quote! {let #pat = #pat.clone();})
 			.rev()
 			.collect::<Vec<TokenStream2>>();
 		let clone_all = clone_items
@@ -166,7 +166,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						#to_clone
 					}
 				}
-			});
+
+				buf
+			})
+			.collect::<Vec<TokenStream2>>();
 
 		println!(
 			"{}\n",
