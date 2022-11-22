@@ -164,7 +164,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		clone_all.reverse();
 
 		println!(
-			"{}",
+			"{}\n",
 			clone_all
 				.iter()
 				.map(|tt| format!("{tt}\n"))
