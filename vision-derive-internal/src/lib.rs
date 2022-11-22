@@ -168,7 +168,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			// Nest the callback after all arguments are deserialized
 			let callback = if i == 0 {
-				callback.take().unwrap_or(TokenStream2::new())
+				callback
+					.take()
+					.map(|cb| {
+						quote! {
+							#cb
+							#clone_all
+						}
+					})
+					.unwrap_or(TokenStream2::new())
 			} else {
 				TokenStream2::new()
 			};
@@ -451,7 +459,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				#ser
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-				send_message(from.lock().unwrap().take().unwrap(), handler_name.as_ptr() as i32, arg);
+				send_message(from.lock().unwrap().copied().unwrap(), handler_name.as_ptr() as i32, arg);
 			};
 		},
 		None => quote! {},
