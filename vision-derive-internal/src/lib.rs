@@ -167,7 +167,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			"{}",
 			clone_all
 				.iter()
-				.map(|tt| tt.to_string())
+				.map(|tt| format!("{tt}\n"))
 				.collect::<String>()
 		);
 
