@@ -163,6 +163,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				});
 		clone_all.reverse();
 
+		println!("{:?}", clone_all);
+
 		for (i, (pat, ty)) in arg_types.into_iter() {
 			let clone_all = &clone_all[i];
 
