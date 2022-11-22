@@ -422,7 +422,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
-		if let Some(callback) = lock.get_mut(msg_id.lock().unwrap().take().unwrap() as usize).unwrap().take() {
+		let maybe_cb = lock.get_mut(msg_id.lock().unwrap().take().unwrap() as usize).unwrap().take();
+		if let Some(callback) = maybe_cb {
 			callback.call(arg.lock().unwrap().take().unwrap());
 		}
 	};
