@@ -40,6 +40,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let msg_full_name = input.sig.ident.to_string();
 	let msg_name = msg_full_name.strip_prefix("handle_")
 		.expect("Must be a message handler starting with handle_, followed by the name of the message being handled.");
+	let ret_name = format!("{}_ret", msg_name);
 
 	// Messages have ABI bindings generated that allow easy UX:
 	// - A pipeline mutex that allows bubbling results from handlers up to
@@ -49,7 +50,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("PIPELINE_{}", msg_name.to_ascii_uppercase()),
 		Span::call_site(),
 	);
-	let msg_ret_handler_name = Ident::new(&format!("handle_{}", msg_name), Span::call_site());
+	let msg_ret_handler_name = Ident::new(&format!("handle_{}_ret", msg_name), Span::call_site());
 
 	let msg_ident = input.sig.ident;
 
@@ -476,7 +477,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				move |arg: #ser_type| {
 				#ser
 
-				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
+				let handler_name = std::ffi::CString::new(#ret_name).expect("Invalid scheduler message kind encoding");
 				send_message((*from.lock().unwrap()).unwrap(), handler_name.as_ptr() as i32, arg);
 			}};
 		},
