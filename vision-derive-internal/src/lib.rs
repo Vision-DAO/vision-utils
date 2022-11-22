@@ -459,7 +459,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				#ser
 
 				let handler_name = std::ffi::CString::new(#msg_name).expect("Invalid scheduler message kind encoding");
-				send_message(from.lock().unwrap().copied().unwrap(), handler_name.as_ptr() as i32, arg);
+				send_message(from.lock().unwrap().deref_mut().copied().unwrap(), handler_name.as_ptr() as i32, arg);
 			};
 		},
 		None => quote! {},
