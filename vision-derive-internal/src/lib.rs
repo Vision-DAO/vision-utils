@@ -366,7 +366,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
-							bytes.append(&mut vv);
+							bytes.append(&mut v);
 							let v = bytes;
 
 							#callback
