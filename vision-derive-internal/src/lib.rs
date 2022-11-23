@@ -166,6 +166,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let also_clone = &clone_items[(i + 1)..];
 
 				let mut buf = quote! {
+					let v_pos = v_pos.clone();
 					#item_clone
 				};
 
@@ -361,13 +362,20 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let mut bytes = Vec::from((#id as #min_equivalent).to_le_bytes());
-
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
-							bytes.append(&mut v);
-							let mut v = bytes;
+							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
+							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
+							let arg_bytes_iter = arg_bytes.into_iter();
+
+							{
+								let lock = v.lock().unwrap();
+
+								for (i, byte) in arg_bytes.enumerate() {
+									lock[v_start + i] = byte;
+								}
+							}
 
 							#callback
 							#gen_buf
@@ -389,10 +397,19 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						drop(&#id);
 
 						// Allocate a memory cell for the value
+						#clone_all
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
-							let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
-							cell_addr_bytes.append(&mut v);
-							let mut v = cell_addr_bytes;
+							let arg_bytes = res_buf.to_le_bytes();
+							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
+							let arg_bytes_iter = arg_bytes.into_iter();
+
+							{
+								let lock = v.lock().unwrap();
+
+								for (i, byte) in arg_bytes {
+									lock[v_start + i] = byte;
+								}
+							}
 
 							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
@@ -410,8 +427,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen_buf = quote! {
 			use #extern_crate_pre::serde::Serialize;
 
-			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
+			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
 			let v_ptr = v.as_ptr() as i32;
+			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 			drop(&v_ptr);
 
 			#gen_buf
