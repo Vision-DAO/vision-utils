@@ -406,7 +406,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							{
 								let mut lock = v.lock().unwrap();
 
-								for (i, byte) in arg_bytes {
+								for (i, byte) in arg_bytes.into_iter().enumerate() {
 									lock[v_start + i] = byte;
 								}
 							}
