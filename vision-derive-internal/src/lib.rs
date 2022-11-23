@@ -389,7 +389,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						drop(&#id);
 
 						// Allocate a memory cell for the value
-						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf| {
+						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
 							cell_addr_bytes.append(&mut v);
 							let mut v = cell_addr_bytes;
