@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
+use sha2::{Digest, Sha256};
 use syn::{
 	parse, parse_macro_input, parse_quote, punctuated::Punctuated, token::Colon, token::Comma,
 	AttributeArgs, Expr, ExprPath, FnArg, GenericArgument, Ident, ItemFn, Pat, PatIdent, PatType,
@@ -50,7 +51,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("PIPELINE_{}", msg_name.to_ascii_uppercase()),
 		Span::call_site(),
 	);
-	let msg_ret_handler_name = Ident::new(&format!("handle_{}_ret", msg_name), Span::call_site());
+
+	// Uniquely identify this version of the handler from other handlers
+	let mut hasher = Sha256::new();
+	hasher.update(&input.to_token_stream().to_string()[..20]);
+	let handler_hash = hasher.finalize();
+	let msg_ret_handler_name = Ident::new(
+		&format!("handle_{:x}_{}_ret", handler_hash, msg_name),
+		Span::call_site(),
+	);
 
 	let msg_ident = input.sig.ident;
 
