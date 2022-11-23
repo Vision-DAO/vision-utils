@@ -362,7 +362,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = (*v.lock().unwrap()).as_ptr() as i32 + v.len() as i32;
+							let #id = (*v.lock().unwrap()).as_ptr() as i32 + (*v.lock().unwrap()).len() as i32;
 							drop(&#id);
 
 							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
@@ -393,7 +393,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					quote! {
 						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
-						let #id = (*v.lock().unwrap()).as_ptr() as i32 + v.len() as i32;
+						let #id = (*v.lock().unwrap()).as_ptr() as i32 + (*v.lock().unwrap()).len() as i32;
 						drop(&#id);
 
 						// Allocate a memory cell for the value
@@ -428,7 +428,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			use #extern_crate_pre::serde::Serialize;
 
 			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
-			let v_ptr = v.as_ptr() as i32;
+			let v_ptr = (*v.lock().unwrap()).as_ptr() as i32;
 			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 			drop(&v_ptr);
 
