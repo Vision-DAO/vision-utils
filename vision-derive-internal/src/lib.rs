@@ -166,7 +166,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let also_clone = &clone_items[(i + 1)..];
 
 				let mut buf = quote! {
-					let v_pos = v_pos.clone();
 					#item_clone
 				};
 
@@ -308,6 +307,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let also_clone = &clone_items[(i + 1)..];
 
 				let mut buf = quote! {
+					let v_pos = v_pos.clone();
 					#item_clone
 				};
 
