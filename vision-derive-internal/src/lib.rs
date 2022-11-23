@@ -362,7 +362,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = v.as_ptr() as i32 + v.len() as i32;
+							let #id = (*v.lock().unwrap()).as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
 							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
@@ -393,7 +393,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					quote! {
 						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
-						let #id = v.as_ptr() as i32 + v.len() as i32;
+						let #id = (*v.lock().unwrap()).as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
 
 						// Allocate a memory cell for the value
