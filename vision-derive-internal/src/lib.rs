@@ -41,7 +41,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let msg_full_name = input.sig.ident.to_string();
 	let msg_name = msg_full_name.strip_prefix("handle_")
 		.expect("Must be a message handler starting with handle_, followed by the name of the message being handled.");
-	let ret_name = format!("{}_ret", msg_name);
 
 	// Messages have ABI bindings generated that allow easy UX:
 	// - A pipeline mutex that allows bubbling results from handlers up to
@@ -60,6 +59,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("handle_{:x}_{}_ret", handler_hash, msg_name),
 		Span::call_site(),
 	);
+	let ret_name = format!("{}_{:x}_ret", msg_name, handler_hash);
 
 	let msg_ident = input.sig.ident;
 
