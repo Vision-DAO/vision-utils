@@ -293,13 +293,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		});
 
-		let mut gen_buf = quote! {
-			use #extern_crate_pre::serde::Serialize;
-
-			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
-			let v_ptr = v.as_ptr() as i32;
-			drop(&v_ptr);
-		};
+		let mut gen_buf = TokenStream2::new();
 
 		let clone_items = args_iter
 			.clone()
@@ -372,7 +366,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let #id = v.as_ptr() as i32 + v.len() as i32;
 							drop(&#id);
 
-							v.append(&mut bytes);
+							bytes.append(&mut vv);
+							let v = bytes;
 
 							#callback
 							#gen_buf
@@ -396,7 +391,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// Allocate a memory cell for the value
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf_addr| {
 							let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
-							v.append(&mut cell_addr_bytes);
+							cell_addr_bytes.append(&mut v);
+							let v = cell_addr_bytes;
 
 							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
@@ -410,6 +406,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				})
 			};
 		}
+
+		gen_buf = quote! {
+			use #extern_crate_pre::serde::Serialize;
+
+			let mut v: Vec<u8> = Vec::with_capacity(#total_bytes as usize);
+			let v_ptr = v.as_ptr() as i32;
+			drop(&v_ptr);
+
+			#gen_buf
+		};
+
 		(gen_buf, type_buf)
 	}
 
