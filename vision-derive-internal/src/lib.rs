@@ -308,6 +308,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				let mut buf = quote! {
 					let v_pos = v_pos.clone();
+					let v = v.clone();
 					#item_clone
 				};
 
