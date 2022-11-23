@@ -264,6 +264,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		args_iter: impl Iterator<Item = PatType> + Clone,
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
+		mut callback: Option<TokenStream2>,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -300,7 +301,51 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			drop(&v_ptr);
 		};
 
-		for (id, ser_type) in args_iter {
+		let clone_items = args_iter
+			.clone()
+			.map(|(pat, _)| quote! {let #pat = #pat.clone();})
+			.collect::<Vec<TokenStream2>>();
+		let clone_all = clone_items
+			.clone()
+			.into_iter()
+			.enumerate()
+			.map(|(i, item_clone)| {
+				let also_clone = &clone_items[(i + 1)..];
+
+				let mut buf = quote! {
+					#item_clone
+				};
+
+				for to_clone in also_clone {
+					buf = quote! {
+						#buf
+						#to_clone
+					}
+				}
+
+				buf
+			})
+			.collect::<Vec<TokenStream2>>();
+
+		for (i, (id, ser_type)) in args_iter.enumerate() {
+			let clone_all = &clone_all[i];
+
+			let callback = if i == 0 {
+				callback
+					.take()
+					.map(|cb| {
+						quote! {
+							let #id = #id.clone();
+							#clone_all
+
+							#cb
+						}
+					})
+					.unwrap_or(TokenStream2::new())
+			} else {
+				TokenStream2::new()
+			};
+
 			let ser_type_ident = ser_type
 				.path
 				.segments
@@ -308,7 +353,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				.map(|p| p.ident.clone())
 				.expect("Invalid type");
 
-			let ser = {
+			gen_buf = {
 				// If the return value is a copy type, use its native representation
 				match ser_type_ident.to_string().as_str() {
 					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
@@ -328,6 +373,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							drop(&#id);
 
 							v.append(&mut bytes);
+
+							#callback
+							#gen_buf
 						})
 					}
 					_ => {
@@ -340,30 +388,26 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				// Otherwise, use serde to pass in a memory cell address
 				.unwrap_or({
 					quote! {
-						// Allocate a memory cell for the value
-						let res_buf = #extern_crate_pre::vision_utils::actor::spawn_actor(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR);
-
 						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
 						let #id = v.as_ptr() as i32 + v.len() as i32;
 						drop(&#id);
 
-						let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
-						v.append(&mut cell_addr_bytes);
+						// Allocate a memory cell for the value
+						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf_addr| {
+							let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
+							v.append(&mut cell_addr_bytes);
 
-						#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
 							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
 								#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
+
+								#callback
+								#gen_buf
 							}
 						}));
 					}
 				})
-			};
-
-			gen_buf = quote! {
-				#gen_buf
-				#ser
 			};
 		}
 		(gen_buf, type_buf)
@@ -414,6 +458,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.into_iter(),
 		&alloc_module,
 		&extern_crate_pre,
+		Some(quote! {
+			let handler_name = std::ffi::CString::new(#ret_name).expect("Invalid scheduler message kind encoding");
+			send_message((*from.lock().unwrap()).unwrap(), handler_name.as_ptr() as i32, arg);
+		}),
 	);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
@@ -460,6 +508,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&extern_crate_pre,
 		Some(client_return_deserialize_callback),
 	);
+	let args_ptr = arg_names
+		.iter()
+		.nth(1)
+		.cloned()
+		.unwrap_or(parse_quote! {v_ptr});
+
 	let (client_arg_ser, _) = gen_ser(
 		{
 			// Only generate msg_id if a response is expected
@@ -476,6 +530,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		.into_iter(),
 		&alloc_module,
 		&extern_crate_pre,
+		Some(quote! {
+			let msg_kind = std::ffi::CString::new(#msg_name_vis)
+				.expect("Invalid scheduler message kind encoding");
+
+			send_message(to,
+				 msg_kind.as_ptr() as i32,
+				 #args_ptr);
+		}),
 	);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
@@ -484,11 +546,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let from = from.clone();
 
 				move |arg: #ser_type| {
-				#ser
-
-				let handler_name = std::ffi::CString::new(#ret_name).expect("Invalid scheduler message kind encoding");
-				send_message((*from.lock().unwrap()).unwrap(), handler_name.as_ptr() as i32, arg);
-			}};
+					#ser
+				}
+			};
 		},
 		None => quote! {},
 	};
@@ -530,12 +590,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "module")]
 		#input
 	};
-
-	let args_ptr = arg_names
-		.iter()
-		.nth(1)
-		.cloned()
-		.unwrap_or(parse_quote! {v_ptr});
 
 	let msg_name_ident = Ident::new(msg_name, Span::call_site());
 
@@ -579,12 +633,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				};
 
 				#client_arg_ser
-				let msg_kind = std::ffi::CString::new(#msg_name_vis)
-					.expect("Invalid scheduler message kind encoding");
-
-				send_message(to,
-							 msg_kind.as_ptr() as i32,
-							 #args_ptr);
 			}
 		}
 	} else {
@@ -597,13 +645,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				let msg_id: u32 = 0;
 
 				#client_arg_ser
-
-				let msg_kind = std::ffi::CString::new(#msg_name_vis)
-					.expect("Invalid scheduler message kind encoding");
-
-				send_message(to,
-							 msg_kind.as_ptr() as i32,
-							 #args_ptr);
 			}
 		}
 	}
