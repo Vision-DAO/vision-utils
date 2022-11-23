@@ -367,7 +367,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							drop(&#id);
 
 							bytes.append(&mut v);
-							let v = bytes;
+							let mut v = bytes;
 
 							#callback
 							#gen_buf
@@ -392,7 +392,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf_addr| {
 							let mut cell_addr_bytes = Vec::from(res_buf.to_le_bytes());
 							cell_addr_bytes.append(&mut v);
-							let v = cell_addr_bytes;
+							let mut v = cell_addr_bytes;
 
 							for (i, b) in v_bytes.iter().enumerate() {
 								// Space for offset u32, and val u8
