@@ -656,7 +656,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					}
 
 					unsafe {
-						let msg = std::ffi::CString::new("{} 659", #msg_name_vis).unwrap();
+						let msg = std::ffi::CString::new(format!("{} 659", #msg_name_vis)).unwrap();
 						print(msg.as_ptr() as i32);
 					}
 				}
@@ -675,7 +675,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					}
 
 					unsafe {
-						let msg = std::ffi::CString::new("{} 678", #msg_name_vis).unwrap();
+						let msg = std::ffi::CString::new(format!("{} 678", #msg_name_vis)).unwrap();
 						print(msg.as_ptr() as i32);
 					}
 				}
