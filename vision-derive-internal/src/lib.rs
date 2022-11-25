@@ -650,6 +650,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			pub fn #msg_name_ident(#proper_args, callback: Callback<#ser_type>) {
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
+				{
+					extern "C" {
+						fn print(s: i32);
+					}
+
+					unsafe {
+						let msg = std::ffi::CString::new("{} 659", #msg_name_vis).unwrap();
+						print(msg.as_ptr() as i32);
+					}
+				}
+
 				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
 					lock.push(Some(callback));
@@ -657,6 +668,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					id
 				};
+
+				{
+					extern "C" {
+						fn print(s: i32);
+					}
+
+					unsafe {
+						let msg = std::ffi::CString::new("{} 678", #msg_name_vis).unwrap();
+						print(msg.as_ptr() as i32);
+					}
+				}
 
 				#client_arg_ser
 			}
