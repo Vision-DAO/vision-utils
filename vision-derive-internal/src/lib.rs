@@ -400,7 +400,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							unsafe {
-								let msg = std::ffi::CString::new(format!("403 {}", i)).unwrap();
+								let msg = std::ffi::CString::new(format!("403 {}", #i)).unwrap();
 								print(msg.as_ptr() as i32);
 							}
 						}
@@ -417,7 +417,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							unsafe {
-								let msg = std::ffi::CString::new(format!("420 {}", i)).unwrap();
+								let msg = std::ffi::CString::new(format!("420 {}", #i)).unwrap();
 								print(msg.as_ptr() as i32);
 							}
 						}
@@ -441,7 +441,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								}
 
 								unsafe {
-									let msg = std::ffi::CString::new(format!("444 {}", i)).unwrap();
+									let msg = std::ffi::CString::new(format!("444 {}", #i)).unwrap();
 									print(msg.as_ptr() as i32);
 								}
 							}
