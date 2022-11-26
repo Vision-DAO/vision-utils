@@ -428,10 +428,32 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen_buf = quote! {
 			use #extern_crate_pre::serde::Serialize;
 
+			{
+				extern "C" {
+					fn print(s: i32);
+				}
+
+				unsafe {
+					let msg = std::ffi::CString::new("437").unwrap();
+					print(msg.as_ptr() as i32);
+				}
+			}
+
 			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
 			let v_ptr = (*v.lock().unwrap()).as_ptr() as i32;
 			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 			drop(&v_ptr);
+
+			{
+				extern "C" {
+					fn print(s: i32);
+				}
+
+				unsafe {
+					let msg = std::ffi::CString::new("453").unwrap();
+					print(msg.as_ptr() as i32);
+				}
+			}
 
 			#gen_buf
 		};
@@ -681,6 +703,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				}
 
 				#client_arg_ser
+
+				{
+					extern "C" {
+						fn print(s: i32);
+					}
+
+					unsafe {
+						let msg = std::ffi::CString::new(format!("{} 691", #msg_name_vis)).unwrap();
+						print(msg.as_ptr() as i32);
+					}
+				}
 			}
 		}
 	} else {
