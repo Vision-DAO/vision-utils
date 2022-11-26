@@ -394,11 +394,34 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					quote! {
 						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
+						{
+							extern "C" {
+								fn print(s: i32);
+							}
+
+							unsafe {
+								let msg = std::ffi::CString::new(format!("403 {}", i)).unwrap();
+								print(msg.as_ptr() as i32);
+							}
+						}
+
 						let #id = (*v.lock().unwrap()).as_ptr() as i32 + (*v.lock().unwrap()).len() as i32;
 						drop(&#id);
 
 						// Allocate a memory cell for the value
 						#clone_all
+
+						{
+							extern "C" {
+								fn print(s: i32);
+							}
+
+							unsafe {
+								let msg = std::ffi::CString::new(format!("420 {}", i)).unwrap();
+								print(msg.as_ptr() as i32);
+							}
+						}
+
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							let arg_bytes = res_buf.to_le_bytes();
 							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
@@ -409,6 +432,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 								for (i, byte) in arg_bytes.into_iter().enumerate() {
 									lock[v_start + i] = byte;
+								}
+							}
+
+							{
+								extern "C" {
+									fn print(s: i32);
+								}
+
+								unsafe {
+									let msg = std::ffi::CString::new(format!("444 {}", i)).unwrap();
+									print(msg.as_ptr() as i32);
 								}
 							}
 
