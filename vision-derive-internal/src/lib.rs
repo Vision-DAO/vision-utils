@@ -56,7 +56,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	hasher.update(&input.to_token_stream().to_string()[..20]);
 	let handler_hash = hasher.finalize();
 	let msg_ret_handler_name = Ident::new(
-		&format!("handle_{:x}_{}_ret", handler_hash, msg_name),
+		&format!("handle_{}_{:x}_ret", msg_name, handler_hash),
 		Span::call_site(),
 	);
 	let ret_name = format!("{}_{:x}_ret", msg_name, handler_hash);
@@ -363,7 +363,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						type_buf.push(Some(ser_type));
 						Some(quote! {
-							let #id = (*v.lock().unwrap()).as_ptr() as i32 + (*v.lock().unwrap()).len() as i32;
+							let #id = {
+								let lock = v.lock().unwrap();
+
+								lock.as_ptr() as i32 + lock.len() as i32
+							};
 							drop(&#id);
 
 							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
@@ -394,33 +398,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					quote! {
 						let v_bytes = #extern_crate_pre::serde_json::to_vec(&#id).unwrap();
 
-						{
-							extern "C" {
-								fn print(s: i32);
-							}
-
-							unsafe {
-								let msg = std::ffi::CString::new(format!("403 {}", #i)).unwrap();
-								print(msg.as_ptr() as i32);
-							}
-						}
-
-						let #id = (*v.lock().unwrap()).as_ptr() as i32 + (*v.lock().unwrap()).len() as i32;
+						let #id = {
+							let lock = v.lock().unwrap();
+							lock.as_ptr() as i32 + lock.len() as i32
+						};
 						drop(&#id);
 
 						// Allocate a memory cell for the value
 						#clone_all
-
-						{
-							extern "C" {
-								fn print(s: i32);
-							}
-
-							unsafe {
-								let msg = std::ffi::CString::new(format!("420 {}", #i)).unwrap();
-								print(msg.as_ptr() as i32);
-							}
-						}
 
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							let arg_bytes = res_buf.to_le_bytes();
@@ -432,17 +417,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 								for (i, byte) in arg_bytes.into_iter().enumerate() {
 									lock[v_start + i] = byte;
-								}
-							}
-
-							{
-								extern "C" {
-									fn print(s: i32);
-								}
-
-								unsafe {
-									let msg = std::ffi::CString::new(format!("444 {}", #i)).unwrap();
-									print(msg.as_ptr() as i32);
 								}
 							}
 
@@ -462,32 +436,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen_buf = quote! {
 			use #extern_crate_pre::serde::Serialize;
 
-			{
-				extern "C" {
-					fn print(s: i32);
-				}
-
-				unsafe {
-					let msg = std::ffi::CString::new("437").unwrap();
-					print(msg.as_ptr() as i32);
-				}
-			}
-
 			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
 			let v_ptr = (*v.lock().unwrap()).as_ptr() as i32;
 			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 			drop(&v_ptr);
-
-			{
-				extern "C" {
-					fn print(s: i32);
-				}
-
-				unsafe {
-					let msg = std::ffi::CString::new("453").unwrap();
-					print(msg.as_ptr() as i32);
-				}
-			}
 
 			#gen_buf
 		};
@@ -542,7 +494,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&extern_crate_pre,
 		Some(quote! {
 			let handler_name = std::ffi::CString::new(#ret_name).expect("Invalid scheduler message kind encoding");
-			send_message((*from.lock().unwrap()).unwrap(), handler_name.as_ptr() as i32, arg);
+
+			let lock = from.lock().unwrap();
+			send_message(lock.unwrap(), handler_name.as_ptr() as i32, arg);
 		}),
 	);
 
@@ -571,8 +525,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
 		let maybe_cb = lock.get_mut(msg_id.lock().unwrap().take().unwrap() as usize).unwrap().take();
+
+		{
+			extern "C" {
+				fn print(s: i32);
+			}
+
+			let msg = std::ffi::CString::new("526").unwrap();
+
+			unsafe {
+				print(msg.as_ptr() as i32);
+			}
+		}
+
 		if let Some(callback) = maybe_cb {
-			callback.call(arg.lock().unwrap().take().unwrap());
+			let arg = arg.lock().unwrap().take().unwrap();
+
+			callback.call(arg);
 		}
 	};
 
@@ -638,15 +607,22 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// Use the serializer to return a WASM-compatible response to consumers
 	// and generate bindings that streamline sending the message, and getting a
 	// response
-	let consumed_arg_names: Punctuated<Expr, Comma> = arg_names
+	let mut consumed_arg_names: Punctuated<Expr, Comma> = Punctuated::new();
+	consumed_arg_names.push(parse_quote! {from});
+	arg_names
 		.clone()
 		.into_iter()
+		.skip(1)
 		.map(|arg: Expr| -> Expr {
 			parse_quote! {#arg.lock().unwrap().take().unwrap()}
 		})
-		.collect();
+		.for_each(|val| consumed_arg_names.push(val));
+
 	let deserialize_server_args_callback = quote! {
 		#further_processing
+		let from = {
+			from.lock().unwrap().clone().unwrap()
+		};
 		#inner_ident(#consumed_arg_names, #extern_crate_pre::vision_utils::types::Callback::new(cb));
 	};
 
@@ -706,17 +682,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			pub fn #msg_name_ident(#proper_args, callback: Callback<#ser_type>) {
 				use #extern_crate_pre::vision_utils::actor::send_message;
 
-				{
-					extern "C" {
-						fn print(s: i32);
-					}
-
-					unsafe {
-						let msg = std::ffi::CString::new(format!("{} 659", #msg_name_vis)).unwrap();
-						print(msg.as_ptr() as i32);
-					}
-				}
-
 				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
 					lock.push(Some(callback));
@@ -725,29 +690,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					id
 				};
 
-				{
-					extern "C" {
-						fn print(s: i32);
-					}
-
-					unsafe {
-						let msg = std::ffi::CString::new(format!("{} 678", #msg_name_vis)).unwrap();
-						print(msg.as_ptr() as i32);
-					}
-				}
-
 				#client_arg_ser
-
-				{
-					extern "C" {
-						fn print(s: i32);
-					}
-
-					unsafe {
-						let msg = std::ffi::CString::new(format!("{} 691", #msg_name_vis)).unwrap();
-						print(msg.as_ptr() as i32);
-					}
-				}
 			}
 		}
 	} else {
