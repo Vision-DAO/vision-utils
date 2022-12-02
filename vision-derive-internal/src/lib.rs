@@ -524,14 +524,28 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
-		let maybe_cb = lock.get_mut(msg_id.lock().unwrap().take().unwrap() as usize).unwrap().take();
+		let maybe_msg_id = msg_id.lock();
 
 		{
 			extern "C" {
 				fn print(s: i32);
 			}
 
-			let msg = std::ffi::CString::new("526").unwrap();
+			let msg = std::ffi::CString::new(format!("{:?} {:?}", &maybe_msg_id, lock.len())).unwrap();
+
+			unsafe {
+				print(msg.as_ptr() as i32);
+			}
+		}
+
+		let maybe_cb = lock.get_mut(maybe_msg_id.unwrap().take().unwrap() as usize).unwrap().take();
+
+		{
+			extern "C" {
+				fn print(s: i32);
+			}
+
+			let msg = std::ffi::CString::new("545").unwrap();
 
 			unsafe {
 				print(msg.as_ptr() as i32);
@@ -684,12 +698,44 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
+					{
+						extern "C" {
+							fn print(s: i32);
+						}
+
+						let msg = std::ffi::CString::new(format!("Before: {:?}", lock.len())).unwrap();
+
+						unsafe {
+							print(msg.as_ptr() as i32);
+						}
+					}
 					lock.push(Some(callback));
+					{
+						extern "C" {
+							fn print(s: i32);
+						}
+
+						let msg = std::ffi::CString::new(format!("After: {:?}", lock.len())).unwrap();
+
+						unsafe {
+							print(msg.as_ptr() as i32);
+						}
+					}
 					let id = lock.len() as u32 - 1;
 
 					id
 				};
+				{
+					extern "C" {
+						fn print(s: i32);
+					}
 
+					let msg = std::ffi::CString::new(format!("msg_id: {:?}", msg_id)).unwrap();
+
+					unsafe {
+						print(msg.as_ptr() as i32);
+					}
+				}
 				#client_arg_ser
 			}
 		}
