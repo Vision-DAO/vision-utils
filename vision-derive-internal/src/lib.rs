@@ -363,14 +363,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						type_buf.push(Some(ser_type));
 						Some(quote! {
+							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
 							let #id = {
 								let lock = v.lock().unwrap();
 
-								lock.as_ptr() as i32 + lock.len() as i32
+								lock.as_ptr() as i32
 							};
 							drop(&#id);
 
-							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
 							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
 							let arg_bytes_iter = arg_bytes.into_iter();
 
@@ -400,7 +400,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						let #id = {
 							let lock = v.lock().unwrap();
-							lock.as_ptr() as i32 + lock.len() as i32
+							lock.as_ptr() as i32
 						};
 						drop(&#id);
 
@@ -520,37 +520,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let msg_name_vis = msg_name.to_string();
+	let msg_ret_handler_name_vis = msg_ret_handler_name.to_string();
 
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 
 		let maybe_msg_id = msg_id.lock();
 
-		{
-			extern "C" {
-				fn print(s: i32);
-			}
-
-			let msg = std::ffi::CString::new(format!("{:?} {:?}", &maybe_msg_id, lock.len())).unwrap();
-
-			unsafe {
-				print(msg.as_ptr() as i32);
-			}
-		}
-
 		let maybe_cb = lock.get_mut(maybe_msg_id.unwrap().take().unwrap() as usize).unwrap().take();
-
-		{
-			extern "C" {
-				fn print(s: i32);
-			}
-
-			let msg = std::ffi::CString::new("545").unwrap();
-
-			unsafe {
-				print(msg.as_ptr() as i32);
-			}
-		}
 
 		if let Some(callback) = maybe_cb {
 			let arg = arg.lock().unwrap().take().unwrap();
@@ -685,7 +662,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		gen = quote! {
 			#gen
 
-			pub static #msg_pipeline_name: RwLock<Vec<Option<Callback<#ser_type>>>> = RwLock::new(Vec::new());
+			pub static #msg_pipeline_name: std::sync::RwLock<Vec<Option<Callback<#ser_type>>>> = std::sync::RwLock::new(Vec::new());
 
 			#[cfg(not(feature = "module"))]
 			#[no_mangle]
@@ -698,44 +675,12 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
-					{
-						extern "C" {
-							fn print(s: i32);
-						}
-
-						let msg = std::ffi::CString::new(format!("Before: {:?}", lock.len())).unwrap();
-
-						unsafe {
-							print(msg.as_ptr() as i32);
-						}
-					}
 					lock.push(Some(callback));
-					{
-						extern "C" {
-							fn print(s: i32);
-						}
-
-						let msg = std::ffi::CString::new(format!("After: {:?}", lock.len())).unwrap();
-
-						unsafe {
-							print(msg.as_ptr() as i32);
-						}
-					}
 					let id = lock.len() as u32 - 1;
 
 					id
 				};
-				{
-					extern "C" {
-						fn print(s: i32);
-					}
 
-					let msg = std::ffi::CString::new(format!("msg_id: {:?}", msg_id)).unwrap();
-
-					unsafe {
-						print(msg.as_ptr() as i32);
-					}
-				}
 				#client_arg_ser
 			}
 		}
