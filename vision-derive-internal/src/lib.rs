@@ -55,6 +55,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut hasher = Sha256::new();
 	hasher.update(&input.to_token_stream().to_string()[..20]);
 	let handler_hash = hasher.finalize();
+
 	let msg_ret_handler_name = Ident::new(
 		&format!("handle_{}_{:x}_ret", msg_name, handler_hash),
 		Span::call_site(),
@@ -362,8 +363,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						};
 
 						type_buf.push(Some(ser_type));
+
 						Some(quote! {
 							let arg_bytes = (#id as #min_equivalent).to_le_bytes();
+
 							let #id = {
 								let lock = v.lock().unwrap();
 
@@ -371,7 +374,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							};
 							drop(&#id);
 
-							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
+							let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
 							let arg_bytes_iter = arg_bytes.into_iter();
 
 							{
@@ -409,7 +412,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							let arg_bytes = res_buf.to_le_bytes();
-							let v_start = v_pos.fetch_add(arg_bytes.len(), std::sync::atomic::Ordering::SeqCst);
+							let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
 							let arg_bytes_iter = arg_bytes.into_iter();
 
 							{
@@ -438,7 +441,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
 			let v_ptr = (*v.lock().unwrap()).as_ptr() as i32;
-			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(#total_bytes as usize));
 			drop(&v_ptr);
 
 			#gen_buf
@@ -520,7 +523,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	}
 
 	let msg_name_vis = msg_name.to_string();
-	let msg_ret_handler_name_vis = msg_ret_handler_name.to_string();
 
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
