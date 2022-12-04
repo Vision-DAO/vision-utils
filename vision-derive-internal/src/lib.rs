@@ -190,6 +190,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.take()
 					.map(|cb| {
 						quote! {
+							{
+								extern "C" {
+									fn print(s: i32);
+								}
+
+								let msg = std::ffi::CString::new("198").unwrap();
+
+								unsafe {
+									print(msg.as_ptr() as i32);
+								}
+							}
 							let #pat = #pat.clone();
 							#clone_all
 
@@ -225,6 +236,18 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
+							{
+								extern "C" {
+									fn print(s: i32);
+								}
+
+								let msg = std::ffi::CString::new(format!("reading {} bytes", len)).unwrap();
+
+								unsafe {
+									print(msg.as_ptr() as i32);
+								}
+							}
+
 							for i in 0..len {
 								buf.lock().unwrap().push(0);
 
@@ -232,11 +255,47 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								let n_done = n_done.clone();
 								#clone_all
 								#alloc_module::read(cell, i, Callback::new(move |val| {
+									{
+										extern "C" {
+											fn print(s: i32);
+										}
+
+										let msg = std::ffi::CString::new("252").unwrap();
+
+										unsafe {
+											print(msg.as_ptr() as i32);
+										}
+									}
+
 									buf.lock().unwrap()[i as usize] = val;
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
+										{
+											extern "C" {
+												fn print(s: i32);
+											}
+
+											let msg = std::ffi::CString::new(format!("{:?}", buf.lock().unwrap())).unwrap();
+
+											unsafe {
+												print(msg.as_ptr() as i32);
+											}
+										}
+
 										// This should not happen, since the wrapper method being used conforms to this practice
 										let #pat = std::sync::Arc::new(std::sync::Mutex::new(Some(#extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters."))));
+
+										{
+											extern "C" {
+												fn print(s: i32);
+											}
+
+											let msg = std::ffi::CString::new("281").unwrap();
+
+											unsafe {
+												print(msg.as_ptr() as i32);
+											}
+										}
 
 										#der
 										#callback
@@ -266,6 +325,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		alloc_module: &Path,
 		extern_crate_pre: &Path,
 		mut callback: Option<TokenStream2>,
+		mut also_clone: Option<TokenStream2>,
 	) -> (TokenStream2, Vec<Option<TypePath>>) {
 		let mut type_buf: Vec<Option<TypePath>> = Vec::new();
 
@@ -305,15 +365,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			.into_iter()
 			.enumerate()
 			.map(|(i, item_clone)| {
-				let also_clone = &clone_items[(i + 1)..];
+				let prev_clone = &clone_items[(i + 1)..];
 
 				let mut buf = quote! {
 					let v_pos = v_pos.clone();
 					let v = v.clone();
+					let n_done = n_done.clone();
 					#item_clone
 				};
 
-				for to_clone in also_clone {
+				if let Some(also_clone) = also_clone.take() {
+					buf = quote! {
+						#also_clone
+						#buf
+					};
+				}
+
+				for to_clone in prev_clone {
 					buf = quote! {
 						#buf
 						#to_clone
@@ -410,7 +478,9 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 						// Allocate a memory cell for the value
 						#clone_all
 
-						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
+						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
+							#clone_all
+							#alloc_module::grow(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
 							let arg_bytes = res_buf.to_le_bytes();
 							let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
 							let arg_bytes_iter = arg_bytes.into_iter();
@@ -424,12 +494,23 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							for (i, b) in v_bytes.iter().enumerate() {
-								// Space for offset u32, and val u8
-								#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(|_| {}));
+								n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-								#callback
+								{
+									#clone_all
+
+									// Space for offset u32, and val u8
+									#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
+										// The last byte was written
+										if n_done.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+											#callback
+										}
+									}));
+								}
+
 								#gen_buf
 							}
+							}));
 						}));
 					}
 				})
@@ -441,6 +522,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			let mut v: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::new(std::sync::Mutex::new(vec![0; #total_bytes as usize]));
 			let v_ptr = (*v.lock().unwrap()).as_ptr() as i32;
+			let n_done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 			let v_pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(#total_bytes as usize));
 			drop(&v_ptr);
 
@@ -501,6 +583,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			let lock = from.lock().unwrap();
 			send_message(lock.unwrap(), handler_name.as_ptr() as i32, arg);
 		}),
+		Some(parse_quote! {let from = from.clone();}),
 	);
 
 	let mut ret_handler_args: Punctuated<PatType, Comma> = Punctuated::new();
@@ -526,10 +609,21 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
+		let msg_id = msg_id.lock().unwrap().take().unwrap() as usize;
 
-		let maybe_msg_id = msg_id.lock();
+		{
+			extern "C" {
+				fn print(s: i32);
+			}
 
-		let maybe_cb = lock.get_mut(maybe_msg_id.unwrap().take().unwrap() as usize).unwrap().take();
+			let msg = std::ffi::CString::new(format!("{} {} {} @ {}", #msg_name_vis, msg_id, lock.len(), std::ptr::addr_of!(lock) as i32)).unwrap();
+
+			unsafe {
+				print(msg.as_ptr() as i32);
+			}
+		}
+
+		let maybe_cb = lock.get_mut(msg_id).unwrap().take();
 
 		if let Some(callback) = maybe_cb {
 			let arg = arg.lock().unwrap().take().unwrap();
@@ -582,6 +676,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				 msg_kind.as_ptr() as i32,
 				 #args_ptr);
 		}),
+		None,
 	);
 
 	let further_processing = match arg_type.get(0).cloned().flatten() {
@@ -677,8 +772,21 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				let msg_id: u32 = {
 					let mut lock = #msg_pipeline_name.write().unwrap();
+
 					lock.push(Some(callback));
 					let id = lock.len() as u32 - 1;
+
+					{
+						extern "C" {
+							fn print(s: i32);
+						}
+
+						let msg = std::ffi::CString::new(format!("-> {} @ {} {}", #msg_name_vis, std::ptr::addr_of!(lock) as i32, lock.len())).unwrap();
+
+						unsafe {
+							print(msg.as_ptr() as i32);
+						}
+					}
 
 					id
 				};
