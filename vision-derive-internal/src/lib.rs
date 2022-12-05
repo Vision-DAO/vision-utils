@@ -19,7 +19,10 @@ use syn::{
 /// non-copy parameters to memory cells (see allocator service)
 #[proc_macro_attribute]
 pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
-	let alloc_module: AttributeArgs = parse_macro_input!(args as AttributeArgs);
+	let alloc_module: AttributeArgs = {
+		let args = args.clone();
+		parse_macro_input!(args as AttributeArgs)
+	};
 	let (alloc_module, extern_crate_pre): (Path, Path) = if alloc_module.len() > 0 {
 		(
 			parse_quote!(self),
@@ -79,7 +82,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 	// Save argument names for proxying call to inner handlers
 	// Skip serializing the callback parametera
-	let mut args = {
+	let mut arguments = {
 		let mut with_cb = input.sig.inputs.clone();
 		with_cb.pop();
 
@@ -90,7 +93,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		with_cb
 	};
-	let args_iter = args.clone().into_iter().filter_map(|arg| match arg {
+	let args_iter = arguments.clone().into_iter().filter_map(|arg| match arg {
 		FnArg::Typed(arg) => Some(arg),
 		FnArg::Receiver(_) => panic!("Cannot use self in handler."),
 	});
@@ -480,7 +483,19 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							#clone_all
-							#alloc_module::grow(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
+							{
+								extern "C" {
+									fn print(s: i32);
+								}
+
+								let msg = std::ffi::CString::new(format!("growing {}", res_buf)).unwrap();
+
+								unsafe {
+									print(msg.as_ptr() as i32);
+								}
+							}
+
+							#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
 							let arg_bytes = res_buf.to_le_bytes();
 							let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
 							let arg_bytes_iter = arg_bytes.into_iter();
@@ -718,7 +733,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	// copy type in client-side code
 	let der = gen_der(
 		args_iter,
-		Some(&mut args),
+		Some(&mut arguments),
 		&alloc_module,
 		&extern_crate_pre,
 		Some(deserialize_server_args_callback),
@@ -727,7 +742,19 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut gen = quote! {
 		#[cfg(feature = "module")]
 		#extern_attrs
-		pub extern "C" fn #msg_ident(#args, msg_id: u32) {
+		pub extern "C" fn #msg_ident(#arguments, msg_id: u32) {
+			{
+				extern "C" {
+					fn print(s: i32);
+				}
+
+				let msg = std::ffi::CString::new(format!("{}", #msg_name_vis)).unwrap();
+
+				unsafe {
+					print(msg.as_ptr() as i32);
+				}
+			}
+
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
@@ -754,6 +781,30 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		buff
 	};
 
+	// We have already generated the private-usage client copy
+	let private_bindings: TokenStream2 = if msg_name.ends_with("_priv") {
+		TokenStream::new().into()
+	} else {
+		let mut new_input = input.clone();
+		let old_ident = new_input.sig.ident.to_string();
+
+		new_input.sig.ident = Ident::new(
+			&format!("{}_priv", old_ident.strip_prefix("inner_").unwrap()),
+			Span::call_site(),
+		);
+
+		with_bindings(args, new_input.to_token_stream().into()).into()
+	};
+
+	// Super scuffed
+	let pub_binding_ret_vis = if msg_name.ends_with("_priv") {
+		quote! {
+			#[cfg(feature = "module")]
+		}
+	} else {
+		quote! {#[cfg(not(feature = "module"))]}
+	};
+
 	// Include handlers for the response value if there is one
 	if let Some(ret_type) = ret_type {
 		gen = quote! {
@@ -761,7 +812,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			pub static #msg_pipeline_name: std::sync::RwLock<Vec<Option<Callback<#ser_type>>>> = std::sync::RwLock::new(Vec::new());
 
-			#[cfg(not(feature = "module"))]
+			#pub_binding_ret_vis
 			#[no_mangle]
 			pub extern "C" fn #msg_ret_handler_name(from: #extern_crate_pre::vision_utils::types::Address, arg: #ret_type, msg_id: u32) {
 				#ret_der
@@ -793,6 +844,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 				#client_arg_ser
 			}
+
+			#private_bindings
 		}
 	} else {
 		gen = quote! {
