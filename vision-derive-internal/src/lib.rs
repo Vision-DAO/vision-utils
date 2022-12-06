@@ -68,6 +68,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let msg_ident = input.sig.ident;
 
 	// Reattach #[] attrs to the newly generated wrapper function
+	let original_attrs = input.attrs.clone();
 	let extern_attrs = TokenStream2::from_iter(
 		input
 			.attrs
@@ -397,29 +398,32 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 		for (i, (id, ser_type)) in args_iter.enumerate() {
 			let clone_all = &clone_all[i];
-
-			let callback = if i == 0 {
-				callback
-					.take()
-					.map(|cb| {
-						quote! {
-							let #id = #id.clone();
-							#clone_all
-
-							#cb
-						}
-					})
-					.unwrap_or(TokenStream2::new())
-			} else {
-				TokenStream2::new()
-			};
-
 			let ser_type_ident = ser_type
 				.path
 				.segments
 				.last()
 				.map(|p| p.ident.clone())
 				.expect("Invalid type");
+
+			// Callbacks may only be run if this is the last parameter being synchronously serialized
+			// or if the current item is being asynchronously serialized
+			let callback = if ![
+				"Address", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64",
+			]
+			.contains(&ser_type_ident.to_string().as_str())
+				|| i == 0
+			{
+				callback.clone().map(|cb| {
+					quote! {
+						let #id = #id.clone();
+						#clone_all
+
+						#cb
+					}
+				})
+			} else {
+				None
+			};
 
 			gen_buf = {
 				// If the return value is a copy type, use its native representation
@@ -456,7 +460,10 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								}
 							}
 
-							#callback
+							if n_done.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+								#callback
+							}
+
 							#gen_buf
 						})
 					}
@@ -496,35 +503,95 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							}
 
 							#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
-							let arg_bytes = res_buf.to_le_bytes();
-							let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
-							let arg_bytes_iter = arg_bytes.into_iter();
+								{
+									extern "C" {
+										fn print(s: i32);
+									}
 
-							{
-								let mut lock = v.lock().unwrap();
+									let msg = std::ffi::CString::new("505").unwrap();
 
-								for (i, byte) in arg_bytes.into_iter().enumerate() {
-									lock[v_start + i] = byte;
+									unsafe {
+										print(msg.as_ptr() as i32);
+									}
 								}
-							}
 
-							for (i, b) in v_bytes.iter().enumerate() {
-								n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+								let arg_bytes = res_buf.to_le_bytes();
+								let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
+								let arg_bytes_iter = arg_bytes.into_iter();
 
 								{
-									#clone_all
+									extern "C" {
+										fn print(s: i32);
+									}
 
-									// Space for offset u32, and val u8
-									#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
-										// The last byte was written
-										if n_done.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
-											#callback
-										}
-									}));
+									let msg = std::ffi::CString::new("521").unwrap();
+
+									unsafe {
+										print(msg.as_ptr() as i32);
+									}
 								}
 
-								#gen_buf
-							}
+								{
+									let mut lock = v.lock().unwrap();
+
+									for (i, byte) in arg_bytes.into_iter().enumerate() {
+										lock[v_start + i] = byte;
+									}
+								}
+
+								{
+									extern "C" {
+										fn print(s: i32);
+									}
+
+									let msg = std::ffi::CString::new("541").unwrap();
+
+									unsafe {
+										print(msg.as_ptr() as i32);
+									}
+								}
+
+								for (i, b) in v_bytes.iter().enumerate() {
+									n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+									{
+										#clone_all
+
+										// Space for offset u32, and val u8
+										#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
+											{
+												extern "C" {
+													fn print(s: i32);
+												}
+
+												let msg = std::ffi::CString::new("561").unwrap();
+
+												unsafe {
+													print(msg.as_ptr() as i32);
+												}
+											}
+
+											// The last byte was written
+											if n_done.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+												{
+													extern "C" {
+														fn print(s: i32);
+													}
+
+													let msg = std::ffi::CString::new("575").unwrap();
+
+													unsafe {
+														print(msg.as_ptr() as i32);
+													}
+												}
+
+												#callback
+											}
+										}));
+									}
+
+									#gen_buf
+								}
 							}));
 						}));
 					}
@@ -661,11 +728,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		&extern_crate_pre,
 		Some(client_return_deserialize_callback),
 	);
-	let args_ptr = arg_names
-		.iter()
-		.nth(1)
-		.cloned()
-		.unwrap_or(parse_quote! {v_ptr});
+	let args_ptr: Expr = parse_quote! {v_ptr};
 
 	let (client_arg_ser, _) = gen_ser(
 		{
@@ -792,6 +855,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			&format!("{}_priv", old_ident.strip_prefix("inner_").unwrap()),
 			Span::call_site(),
 		);
+		new_input.attrs = original_attrs;
 
 		with_bindings(args, new_input.to_token_stream().into()).into()
 	};
