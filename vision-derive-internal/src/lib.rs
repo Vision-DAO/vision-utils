@@ -194,17 +194,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 					.take()
 					.map(|cb| {
 						quote! {
-							{
-								extern "C" {
-									fn print(s: i32);
-								}
-
-								let msg = std::ffi::CString::new("198").unwrap();
-
-								unsafe {
-									print(msg.as_ptr() as i32);
-								}
-							}
 							let #pat = #pat.clone();
 							#clone_all
 
@@ -240,18 +229,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
-							{
-								extern "C" {
-									fn print(s: i32);
-								}
-
-								let msg = std::ffi::CString::new(format!("reading {} bytes", len)).unwrap();
-
-								unsafe {
-									print(msg.as_ptr() as i32);
-								}
-							}
-
 							for i in 0..len {
 								buf.lock().unwrap().push(0);
 
@@ -259,47 +236,11 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								let n_done = n_done.clone();
 								#clone_all
 								#alloc_module::read(cell, i, Callback::new(move |val| {
-									{
-										extern "C" {
-											fn print(s: i32);
-										}
-
-										let msg = std::ffi::CString::new("252").unwrap();
-
-										unsafe {
-											print(msg.as_ptr() as i32);
-										}
-									}
-
 									buf.lock().unwrap()[i as usize] = val;
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == len - 1 {
-										{
-											extern "C" {
-												fn print(s: i32);
-											}
-
-											let msg = std::ffi::CString::new(format!("{:?}", buf.lock().unwrap())).unwrap();
-
-											unsafe {
-												print(msg.as_ptr() as i32);
-											}
-										}
-
 										// This should not happen, since the wrapper method being used conforms to this practice
 										let #pat = std::sync::Arc::new(std::sync::Mutex::new(Some(#extern_crate_pre::serde_json::from_slice(&buf.lock().unwrap()).expect("Failed to deserialize input parameters."))));
-
-										{
-											extern "C" {
-												fn print(s: i32);
-											}
-
-											let msg = std::ffi::CString::new("281").unwrap();
-
-											unsafe {
-												print(msg.as_ptr() as i32);
-											}
-										}
 
 										#der
 										#callback
@@ -490,64 +431,17 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 						#alloc_module::allocate(#extern_crate_pre::vision_utils::types::ALLOCATOR_ADDR, #extern_crate_pre::vision_utils::types::Callback::new(move |res_buf: u32| {
 							#clone_all
-							{
-								extern "C" {
-									fn print(s: i32);
-								}
-
-								let msg = std::ffi::CString::new(format!("growing {}", res_buf)).unwrap();
-
-								unsafe {
-									print(msg.as_ptr() as i32);
-								}
-							}
 
 							#alloc_module::grow(res_buf, v_bytes.len() as u32, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
-								{
-									extern "C" {
-										fn print(s: i32);
-									}
-
-									let msg = std::ffi::CString::new("505").unwrap();
-
-									unsafe {
-										print(msg.as_ptr() as i32);
-									}
-								}
-
 								let arg_bytes = res_buf.to_le_bytes();
 								let v_start = (v_pos.fetch_sub(arg_bytes.len() as usize, std::sync::atomic::Ordering::SeqCst) - arg_bytes.len()) as usize;
 								let arg_bytes_iter = arg_bytes.into_iter();
-
-								{
-									extern "C" {
-										fn print(s: i32);
-									}
-
-									let msg = std::ffi::CString::new("521").unwrap();
-
-									unsafe {
-										print(msg.as_ptr() as i32);
-									}
-								}
 
 								{
 									let mut lock = v.lock().unwrap();
 
 									for (i, byte) in arg_bytes.into_iter().enumerate() {
 										lock[v_start + i] = byte;
-									}
-								}
-
-								{
-									extern "C" {
-										fn print(s: i32);
-									}
-
-									let msg = std::ffi::CString::new("541").unwrap();
-
-									unsafe {
-										print(msg.as_ptr() as i32);
 									}
 								}
 
@@ -559,39 +453,15 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 										// Space for offset u32, and val u8
 										#alloc_module::write(res_buf, i as u32, *b, #extern_crate_pre::vision_utils::types::Callback::new(move |_| {
-											{
-												extern "C" {
-													fn print(s: i32);
-												}
-
-												let msg = std::ffi::CString::new("561").unwrap();
-
-												unsafe {
-													print(msg.as_ptr() as i32);
-												}
-											}
-
 											// The last byte was written
 											if n_done.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
-												{
-													extern "C" {
-														fn print(s: i32);
-													}
-
-													let msg = std::ffi::CString::new("575").unwrap();
-
-													unsafe {
-														print(msg.as_ptr() as i32);
-													}
-												}
-
 												#callback
 											}
 										}));
 									}
-
-									#gen_buf
 								}
+
+								#gen_buf
 							}));
 						}));
 					}
@@ -692,18 +562,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 	let client_return_deserialize_callback = quote! {
 		let mut lock = #msg_pipeline_name.write().unwrap();
 		let msg_id = msg_id.lock().unwrap().take().unwrap() as usize;
-
-		{
-			extern "C" {
-				fn print(s: i32);
-			}
-
-			let msg = std::ffi::CString::new(format!("{} {} {} @ {}", #msg_name_vis, msg_id, lock.len(), std::ptr::addr_of!(lock) as i32)).unwrap();
-
-			unsafe {
-				print(msg.as_ptr() as i32);
-			}
-		}
 
 		let maybe_cb = lock.get_mut(msg_id).unwrap().take();
 
@@ -806,18 +664,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "module")]
 		#extern_attrs
 		pub extern "C" fn #msg_ident(#arguments, msg_id: u32) {
-			{
-				extern "C" {
-					fn print(s: i32);
-				}
-
-				let msg = std::ffi::CString::new(format!("{}", #msg_name_vis)).unwrap();
-
-				unsafe {
-					print(msg.as_ptr() as i32);
-				}
-			}
-
 			use #extern_crate_pre::vision_utils::actor::send_message;
 
 			#der
@@ -890,18 +736,6 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 					lock.push(Some(callback));
 					let id = lock.len() as u32 - 1;
-
-					{
-						extern "C" {
-							fn print(s: i32);
-						}
-
-						let msg = std::ffi::CString::new(format!("-> {} @ {} {}", #msg_name_vis, std::ptr::addr_of!(lock) as i32, lock.len())).unwrap();
-
-						unsafe {
-							print(msg.as_ptr() as i32);
-						}
-					}
 
 					id
 				};
