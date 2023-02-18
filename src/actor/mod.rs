@@ -9,6 +9,9 @@ extern "C" {
 
 	#[link_name = "spawn_actor"]
 	fn spawn_actor_raw(addr: Address) -> Address;
+
+	#[link_name = "spawn_actor_from"]
+	fn spawn_actor_from_raw(addr: Address) -> Address;
 }
 
 pub fn send_message(addr: Address, msg_name_buf: i32, msg_buf: i32) {
@@ -21,4 +24,8 @@ pub fn address() -> Address {
 
 pub fn spawn_actor(addr: Address) -> Address {
 	unsafe { spawn_actor_raw(addr) }
+}
+
+pub fn spawn_actor_from(addr: Address) -> Address {
+	unsafe { spawn_actor_from_raw(addr) }
 }
