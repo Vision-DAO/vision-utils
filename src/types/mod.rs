@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, SystemTime, UNIX_EPOCH};
+use std::{
+	sync::{Arc, Mutex},
+	time::{SystemTime, UNIX_EPOCH},
+};
 
 /// The index of an actor in the VVM.
 pub type Address = u32;
@@ -31,7 +34,10 @@ impl<T> Callback<T> {
 	pub fn new(cb: impl FnOnce(T) + Send + Sync + 'static) -> Self {
 		let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
-		Self(Arc::new(Mutex::new(Some(Box::new(cb)))), t)
+		Self(
+			Arc::new(Mutex::new(Some(Box::new(cb)))),
+			t.as_secs() as usize,
+		)
 	}
 
 	pub fn call(self, arg: T) {
