@@ -15,6 +15,9 @@ pub const DOM_ADDR: Address = 6;
 pub const DISPLAY_MANAGER_ADDR: Address = 7;
 pub const MOCK_ALLOCATOR_ADDR: Address = 8;
 pub const FETCH_ADDR: Address = 9;
+pub const WEB3_ADDR: Address = 10;
+pub const PERM_AGENT_ADDR: Address = 11;
+pub const IPFS_ADDR: Address = 12;
 
 /// Failure utilities
 pub const EXIT_SUCCESS: u32 = 0;
