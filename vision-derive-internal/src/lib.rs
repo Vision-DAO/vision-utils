@@ -207,7 +207,8 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 
 			match ty.to_string().as_str() {
 				// No work needs to be done for copy types, since they are passed in as their values
-				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+				"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64"
+				| "i128" | "u128" => {
 					der = quote! {
 						let #pat = #pat as #ty;
 						let #pat = std::sync::Arc::new(std::sync::Mutex::new(Some(#pat)));
@@ -294,6 +295,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 				.to_string()
 				.as_str()
 			{
+				"u128" | "i128" => 16,
 				"i64" | "u64" => 8,
 				_ => 4, // Address (and anything serialied to an address), i32, u32
 			}
@@ -349,7 +351,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			// Callbacks may only be run if this is the last parameter being synchronously serialized
 			// or if the current item is being asynchronously serialized
 			let callback = if ![
-				"Address", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64",
+				"Address", "i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "i128", "u128",
 			]
 			.contains(&ser_type_ident.to_string().as_str())
 				|| i == 0
@@ -369,12 +371,14 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 			gen_buf = {
 				// If the return value is a copy type, use its native representation
 				match ser_type_ident.to_string().as_str() {
-					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" => {
+					"Address" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "i128" | "u128" => {
 						let min_equivalent = match ser_type_ident.to_string().as_str() {
 							"u8" | "Address" | "u16" | "u32" => quote!{u32},
 							"i8" | "i16" | "i32" => quote!{i32},
 							"i64" => quote!{i64},
 							"u64" => quote!{u64},
+							"i128" => quote!{i128},
+							"u128" => quote!{u128},
 							_ => quote!{u32},
 						};
 
