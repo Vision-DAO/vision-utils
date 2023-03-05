@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["vision-derive-internal", "vision-derive-internal", "with_bindings_test", "vision-derive"]
+members = ["vision-derive-internal", "vision-derive-internal", "vision-derive"]
