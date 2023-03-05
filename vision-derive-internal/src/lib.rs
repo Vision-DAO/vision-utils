@@ -230,18 +230,20 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 							let mut buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 							let n_done = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 							let mut slots = 0..len;
-							let actors = len / 16 + len % 16;
+							let actors: u32 = len / 16 + len % 16;
 
 							for i in 0..(len / 16) {
-								let _ = slots.take(16);
+								for i in 0..16 {
+									let _ = slots.next();
+								}
 
-								let mut buf_ent = vec![0; 16];
-								buf.lock().unwrap().push(&mut buf_ent);
+								let mut buf_ent: Vec<u8> = vec![0; 16];
+								buf.lock().unwrap().append(&mut buf_ent);
 
 								let buf = buf.clone();
 								let n_done = n_done.clone();
 								#clone_all
-								#alloc_module::read_chunk(cell, i * 16, 16, Callback::new(move |val| {
+								#alloc_module::read_chunk(cell, i * 16, 16, Callback::new(move |val: u128| {
 									let bytes = val.to_le_bytes();
 
 									for i in 0..16 {
@@ -264,7 +266,7 @@ pub fn with_bindings(args: TokenStream, input: TokenStream) -> TokenStream {
 								let buf = buf.clone();
 								let n_done = n_done.clone();
 								#clone_all
-								#alloc_module::read(cell, i, Callback::new(move |val| {
+								#alloc_module::read(cell, i, Callback::new(move |val: u8| {
 									buf.lock().unwrap()[i as usize] = val;
 
 									if n_done.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == actors - 1 {
